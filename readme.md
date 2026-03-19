@@ -1,1 +1,1 @@
-# This is a live compailer where user can interact with live recoarded videos
+# This is a live compiler that allows users to interact with recorded videos in real time.
