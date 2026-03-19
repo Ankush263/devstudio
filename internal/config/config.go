@@ -12,7 +12,7 @@ type Config struct {
 func LoadConfig() *Config {
 	cfg := &Config{
 		Port: GetEnv("PORT", "8000"),
-		DBUrl: GetEnv("DBUrl", ""),
+		DBUrl: GetEnv("DB_URL", ""),
 		JWTSecret: GetEnv("JWT_SECRET", ""),
 		TokenExpiry: GetEnv("TOKEN_EXPIRY", "24h"),
 	}

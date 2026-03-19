@@ -1,13 +1,36 @@
 package main
 
-import "github.com/gin-gonic/gin"
+import (
+	"log"
+
+	"github.com/Ankush263/devstudio/internal/api/handlers"
+	"github.com/Ankush263/devstudio/internal/api/routes"
+	"github.com/Ankush263/devstudio/internal/config"
+	"github.com/Ankush263/devstudio/internal/db"
+	"github.com/Ankush263/devstudio/internal/services"
+	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
+)
+
 
 func main() {
-	router := gin.Default()
-	router.GET("/health", func (c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "pong",
-		})
-	})
-	router.Run(":8000")
+	err := godotenv.Load()
+
+	if err != nil {
+		log.Println("No .env file found")
+	}
+	
+	cfg := config.LoadConfig()
+
+	database := db.NewDB(cfg.DBUrl)
+
+	authService := services.NewAuthService(database)
+	authHandler := handlers.NewAuthHandler(authService)
+
+	r := gin.Default()
+
+	routes.SetupRoutes(r, authHandler)
+
+	log.Println("Server running on port", cfg.Port)
+	r.Run(":" + cfg.Port)
 }
