@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"database/sql"
+	"errors"
 
 	"github.com/Ankush263/devstudio/internal/db/sqlc"
 	"golang.org/x/crypto/bcrypt"
@@ -28,5 +29,19 @@ func (s *AuthService) Register(ctx context.Context, username, email, password st
 	})
 
 	return &user, err
+}
+
+func (s *AuthService) Login(ctx context.Context, email, password string) (*sqlc.User, error) {
+	user, err := s.q.GetUserByEmail(ctx, email)
+	if err != nil {
+		return nil, errors.New("invalid credential")
+	}
+
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
+	if err != nil {
+		return nil, errors.New("invalid credential")
+	}
+
+	return &user, nil
 }
 
