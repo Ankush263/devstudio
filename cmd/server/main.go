@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"github.com/Ankush263/devstudio/internal/api/handlers"
+	"github.com/Ankush263/devstudio/internal/api/middleware"
 	"github.com/Ankush263/devstudio/internal/api/routes"
 	"github.com/Ankush263/devstudio/internal/config"
 	"github.com/Ankush263/devstudio/internal/db"
@@ -24,12 +25,16 @@ func main() {
 
 	database := db.NewDB(cfg.DBUrl)
 
-	authService := services.NewAuthService(database)
+	authService := services.NewAuthService(database, cfg.JWTSecret)
 	authHandler := handlers.NewAuthHandler(authService)
 
 	r := gin.Default()
 
-	routes.SetupRoutes(r, authHandler)
+	r.Use(gin.Logger())
+	r.Use(gin.Recovery())
+	r.Use(middleware.ErrorHandler())
+
+	routes.SetupRoutes(r, authHandler, cfg.JWTSecret)
 
 	log.Println("Server running on port", cfg.Port)
 	r.Run(":" + cfg.Port)

@@ -2,15 +2,25 @@ package routes
 
 import (
 	"github.com/Ankush263/devstudio/internal/api/handlers"
+	"github.com/Ankush263/devstudio/internal/api/middleware"
 	"github.com/gin-gonic/gin"
 )
 
-func SetupRoutes(r *gin.Engine, authHandler *handlers.AuthHandler) {
+func SetupRoutes(r *gin.Engine, authHandler *handlers.AuthHandler, secret string) {
 	api := r.Group("/api")
 
 	auth := api.Group("/auth")
 	{
 		auth.POST("/signup", authHandler.Register)
 		auth.POST("/login", authHandler.Login)
+	}
+
+	protected := api.Group("/")
+	protected.Use(middleware.AuthMiddleware(secret))
+	{
+		protected.GET("/me", func(c *gin.Context) {
+			userID, _ := c.Get("UserID")
+			c.JSON(200, gin.H{"userid": userID})
+		})
 	}
 }
