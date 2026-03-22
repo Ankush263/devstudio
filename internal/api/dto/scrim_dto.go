@@ -26,30 +26,17 @@ func ToScrimResponse(s *sqlc.Scrim) scrimResponse {
 		videoDesc = s.Videodescription.RawMessage
 	}
 
-	// Handle description NullRawMessage -> String
-	var description string
-	if s.Description.Valid {
-		description = s.Description.String
-	}
-
-	var videoURL string
-	if s.Description.Valid {
-		videoURL = s.VideoUrl.String
-	}
-
-	var oplogURL string
-	if s.Description.Valid {
-		oplogURL = s.OplogUrl.String
-	}
-
 	return scrimResponse{
 		ID:               s.ID,
 		UserID:           s.UserID.String(),
 		Title:            s.Title,
-		Description:      description,
+		Description:      String(s.Description),
 		Videodescription: videoDesc,
-		VideoURL:         videoURL,
-		OplogURL:         oplogURL,
-		Duration:         s.Duration.Int32,
+		VideoURL:         String(s.VideoUrl),
+		OplogURL:         String(s.OplogUrl),
+		Duration:         Int32(s.Duration),
+		Published:        Bool(s.Published),
+		CreatedAt:        Time(s.CreatedAt),
+		UpdatedAt:        Time(s.UpdatedAt),
 	}
 }
