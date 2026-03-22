@@ -1,4 +1,5 @@
-package handlers
+// Package dto handles api response
+package dto
 
 import "github.com/Ankush263/devstudio/internal/db/sqlc"
 
@@ -12,7 +13,7 @@ type userResponse struct {
 	UpdatedAt   string      `json:"updated_at"`
 }
 
-func toUserResponse(u *sqlc.User) userResponse {
+func ToUserResponse(u *sqlc.User) userResponse {
 	var desc interface{} = map[string]interface{}{}
 
 	if u.Description.Valid {

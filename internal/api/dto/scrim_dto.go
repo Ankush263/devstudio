@@ -1,4 +1,4 @@
-package handlers
+package dto
 
 import (
 	"github.com/Ankush263/devstudio/internal/db/sqlc"
@@ -19,7 +19,7 @@ type scrimResponse struct {
 	UpdatedAt        string      `json:"updated_at"`
 }
 
-func toScrimResponse(s *sqlc.Scrim) scrimResponse {
+func ToScrimResponse(s *sqlc.Scrim) scrimResponse {
 	var videoDesc interface{} = map[string]interface{}{}
 
 	if s.Videodescription.Valid {

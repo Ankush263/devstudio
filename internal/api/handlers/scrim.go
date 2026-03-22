@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"github.com/Ankush263/devstudio/internal/api/dto"
 	"github.com/Ankush263/devstudio/internal/pkg/response"
 	"github.com/Ankush263/devstudio/internal/services"
 	"github.com/gin-gonic/gin"
@@ -38,5 +39,5 @@ func (h *ScrimHandler) CreateScrim(c *gin.Context) {
 		return
 	}
 
-	response.OK(c, toScrimResponse(scrim))
+	response.OK(c, dto.ToScrimResponse(scrim))
 }

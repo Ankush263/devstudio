@@ -4,6 +4,7 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/Ankush263/devstudio/internal/api/dto"
 	"github.com/Ankush263/devstudio/internal/api/middleware"
 	"github.com/Ankush263/devstudio/internal/pkg/response"
 	"github.com/Ankush263/devstudio/internal/pkg/validator"
@@ -78,7 +79,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		})
 		return
 	}
-	response.OK(c, toUserResponse(user))
+	response.OK(c, dto.ToUserResponse(user))
 }
 
 func (h *AuthHandler) Login(c *gin.Context) {
