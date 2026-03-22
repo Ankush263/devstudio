@@ -8,7 +8,7 @@ import (
 )
 
 type AppError struct {
-	Code int
+	Code    int
 	Message string
 }
 
@@ -25,9 +25,9 @@ func ErrorHandler() gin.HandlerFunc {
 
 			if appErr, ok := err.(*AppError); ok {
 				response.Error(c, appErr.Code, appErr.Message)
-				return 
+				return
 			}
-			
+
 			response.Error(c, http.StatusInternalServerError, "internal server error")
 		}
 	}

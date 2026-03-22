@@ -1,3 +1,4 @@
+// Package jwt handles the jwt
 package jwt
 
 import (
@@ -16,7 +17,7 @@ func GenerateToken(userID string, secret string, expiry time.Duration) (string, 
 		UserID: userID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiry)),
-			IssuedAt: jwt.NewNumericDate(time.Now()),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}
 

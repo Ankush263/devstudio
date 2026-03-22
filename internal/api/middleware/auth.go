@@ -1,3 +1,4 @@
+// Package middleware handle all the middleware logic
 package middleware
 
 import (
@@ -22,7 +23,7 @@ func AuthMiddleware(secret string) gin.HandlerFunc {
 		claims, err := jwt.VerifyToken(tokenStr, secret)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
-			return 
+			return
 		}
 
 		c.Set("userID", claims.UserID)

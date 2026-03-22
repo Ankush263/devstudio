@@ -1,3 +1,4 @@
+// Package handlers handles all HTTP request controllers.
 package handlers
 
 import (
@@ -23,7 +24,7 @@ func NewAuthHandler(s *services.AuthService) *AuthHandler {
 
 type registerRequest struct {
 	Username string `json:"username" validate:"omitempty,min=3"`
-	Email string `json:"email" validate:"required,email"`
+	Email    string `json:"email" validate:"required,email"`
 	Password string `json:"password" validate:"required,min=8"`
 }
 
@@ -48,7 +49,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.Error(&middleware.AppError{
-			Code: http.StatusBadRequest,
+			Code:    http.StatusBadRequest,
 			Message: "invalid request",
 		})
 		return
@@ -56,7 +57,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	if err := validator.ValidateStruct(req); err != nil {
 		c.Error(&middleware.AppError{
-			Code: http.StatusBadRequest,
+			Code:    http.StatusBadRequest,
 			Message: formatValidationError(err),
 		})
 		return
@@ -66,13 +67,13 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	if err != nil {
 		if err.Error() == "email already exists" {
 			c.Error(&middleware.AppError{
-				Code: http.StatusBadRequest,
+				Code:    http.StatusBadRequest,
 				Message: "Email already exists",
 			})
 			return
 		}
 		c.Error(&middleware.AppError{
-			Code: http.StatusBadRequest,
+			Code:    http.StatusBadRequest,
 			Message: err.Error(),
 		})
 		return
@@ -85,7 +86,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.Error(&middleware.AppError{
-			Code: http.StatusBadRequest,
+			Code:    http.StatusBadRequest,
 			Message: err.Error(),
 		})
 		return
@@ -94,7 +95,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	token, err := h.authService.Login(c, req.Email, req.Password)
 	if err != nil {
 		c.Error(&middleware.AppError{
-			Code: http.StatusBadRequest,
+			Code:    http.StatusBadRequest,
 			Message: "invalid credentials",
 		})
 		return

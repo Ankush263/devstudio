@@ -1,3 +1,4 @@
+// Package routes handles the routing logic of the Application
 package routes
 
 import (
@@ -6,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func SetupRoutes(r *gin.Engine, authHandler *handlers.AuthHandler, secret string) {
+func SetupRoutes(r *gin.Engine, authHandler *handlers.AuthHandler, secret string, scrimHandler *handlers.ScrimHandler) {
 	api := r.Group("/api")
 
 	auth := api.Group("/auth")
@@ -22,5 +23,11 @@ func SetupRoutes(r *gin.Engine, authHandler *handlers.AuthHandler, secret string
 			userID, _ := c.Get("UserID")
 			c.JSON(200, gin.H{"userid": userID})
 		})
+	}
+
+	scrim := api.Group("/scrims")
+	scrim.Use(middleware.AuthMiddleware(secret))
+	{
+		scrim.POST("/", scrimHandler.CreateScrim)
 	}
 }

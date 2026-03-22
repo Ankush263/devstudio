@@ -13,14 +13,13 @@ import (
 	"github.com/joho/godotenv"
 )
 
-
 func main() {
 	err := godotenv.Load()
 
 	if err != nil {
 		log.Println("No .env file found")
 	}
-	
+
 	cfg := config.LoadConfig()
 
 	database := db.NewDB(cfg.DBUrl)
@@ -28,13 +27,16 @@ func main() {
 	authService := services.NewAuthService(database, cfg.JWTSecret)
 	authHandler := handlers.NewAuthHandler(authService)
 
+	scrimService := services.NewScrimService(database)
+	scrimHandler := handlers.NewScrimHandler(scrimService)
+
 	r := gin.Default()
 
 	r.Use(gin.Logger())
 	r.Use(gin.Recovery())
 	r.Use(middleware.ErrorHandler())
 
-	routes.SetupRoutes(r, authHandler, cfg.JWTSecret)
+	routes.SetupRoutes(r, authHandler, cfg.JWTSecret, scrimHandler)
 
 	log.Println("Server running on port", cfg.Port)
 	r.Run(":" + cfg.Port)

@@ -1,3 +1,4 @@
+// Package services contains business logic for the application.
 package services
 
 import (
@@ -13,13 +14,13 @@ import (
 )
 
 type AuthService struct {
-	q *sqlc.Queries
+	q         *sqlc.Queries
 	jwtSecret string
 }
 
 func NewAuthService(db *sql.DB, secret string) *AuthService {
 	return &AuthService{
-		q: sqlc.New(db),
+		q:         sqlc.New(db),
 		jwtSecret: secret,
 	}
 }
@@ -29,7 +30,7 @@ func (s *AuthService) Register(ctx context.Context, username, email, password st
 
 	user, err := s.q.CreateUser(ctx, sqlc.CreateUserParams{
 		Username: username,
-		Email: email,
+		Email:    email,
 		Password: string(hashed),
 	})
 
@@ -56,11 +57,10 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (string
 		return "", errors.New("invalid credential")
 	}
 
-	token, err := jwt.GenerateToken(user.Userid.String(), s.jwtSecret, 24 * time.Hour)
+	token, err := jwt.GenerateToken(user.Userid.String(), s.jwtSecret, 24*time.Hour)
 	if err != nil {
 		return "", err
 	}
 
 	return token, nil
 }
-

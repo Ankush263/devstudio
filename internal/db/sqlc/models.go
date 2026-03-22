@@ -5,11 +5,26 @@
 package sqlc
 
 import (
+	"database/sql"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/sqlc-dev/pqtype"
 )
+
+type Scrim struct {
+	ID               uuid.UUID             `json:"id"`
+	UserID           uuid.UUID             `json:"user_id"`
+	Title            string                `json:"title"`
+	Description      sql.NullString        `json:"description"`
+	Videodescription pqtype.NullRawMessage `json:"videodescription"`
+	VideoUrl         sql.NullString        `json:"video_url"`
+	OplogUrl         sql.NullString        `json:"oplog_url"`
+	Duration         sql.NullInt32         `json:"duration"`
+	Published        sql.NullBool          `json:"published"`
+	CreatedAt        sql.NullTime          `json:"created_at"`
+	UpdatedAt        sql.NullTime          `json:"updated_at"`
+}
 
 type User struct {
 	Userid      uuid.UUID             `json:"userid"`

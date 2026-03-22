@@ -1,3 +1,4 @@
+// Package response handles the response body
 package response
 
 import "github.com/gin-gonic/gin"
