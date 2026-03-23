@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+// String function change type sql.NullString into string
 func String(ns sql.NullString) string {
 	if ns.Valid {
 		return ns.String
@@ -31,4 +32,27 @@ func Time(nt sql.NullTime) string {
 		return nt.Time.Format(time.RFC3339)
 	}
 	return ""
+}
+
+// ToNullString function converts string into sql.NullString
+func ToNullString(s string) sql.NullString {
+	if s == "" {
+		return sql.NullString{
+			Valid: false,
+		}
+	}
+	return sql.NullString{
+		String: s,
+		Valid:  true,
+	}
+}
+
+func ToInt32(i int32) sql.NullInt32 {
+	if i == 0 {
+		return sql.NullInt32{Valid: false}
+	}
+	return sql.NullInt32{
+		Int32: i,
+		Valid: true,
+	}
 }

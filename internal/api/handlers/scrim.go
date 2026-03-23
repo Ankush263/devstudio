@@ -20,6 +20,9 @@ func NewScrimHandler(s *services.ScrimService) *ScrimHandler {
 type ScrimRequest struct {
 	Title            string      `json:"title" validate:"required"`
 	Description      string      `json:"description"`
+	VideoURL         string      `json:"videourl"`
+	OplogURL         string      `josn:"oplogurl"`
+	Duration         int32       `json:"duration"`
 	Videodescription interface{} `json:"videodescription"`
 }
 
@@ -33,7 +36,16 @@ func (h *ScrimHandler) CreateScrim(c *gin.Context) {
 		return
 	}
 
-	scrim, err := h.scrimService.CreateScrim(c, userID, req.Title, req.Description, req.Videodescription)
+	scrim, err := h.scrimService.CreateScrim(
+		c,
+		userID,
+		req.Title,
+		req.Description,
+		req.VideoURL,
+		req.OplogURL,
+		req.Duration,
+		req.Videodescription,
+	)
 	if err != nil {
 		response.Error(c, 500, "failed to create scrim")
 		return

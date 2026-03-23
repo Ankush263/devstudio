@@ -14,8 +14,8 @@ import (
 )
 
 const createScrim = `-- name: CreateScrim :one
-INSERT INTO scrims (user_id, title, description, videodescription)
-VALUES ($1, $2, $3, $4)
+INSERT INTO scrims (user_id, title, description, video_url, oplog_url, duration, videodescription)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING id, user_id, title, description, videodescription, video_url, oplog_url, duration, published, created_at, updated_at
 `
 
@@ -23,6 +23,9 @@ type CreateScrimParams struct {
 	UserID           uuid.UUID             `json:"user_id"`
 	Title            string                `json:"title"`
 	Description      sql.NullString        `json:"description"`
+	VideoUrl         sql.NullString        `json:"video_url"`
+	OplogUrl         sql.NullString        `json:"oplog_url"`
+	Duration         sql.NullInt32         `json:"duration"`
 	Videodescription pqtype.NullRawMessage `json:"videodescription"`
 }
 
@@ -31,6 +34,9 @@ func (q *Queries) CreateScrim(ctx context.Context, arg CreateScrimParams) (Scrim
 		arg.UserID,
 		arg.Title,
 		arg.Description,
+		arg.VideoUrl,
+		arg.OplogUrl,
+		arg.Duration,
 		arg.Videodescription,
 	)
 	var i Scrim

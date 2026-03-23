@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 
+	"github.com/Ankush263/devstudio/internal/api/dto"
 	"github.com/Ankush263/devstudio/internal/db/sqlc"
 	"github.com/google/uuid"
 	"github.com/sqlc-dev/pqtype"
@@ -20,18 +21,21 @@ func NewScrimService(db *sql.DB) *ScrimService {
 	}
 }
 
-func (s *ScrimService) CreateScrim(ctx context.Context, userID, title, description string, videodescription interface{}) (*sqlc.Scrim, error) {
+func (s *ScrimService) CreateScrim(
+	ctx context.Context,
+	userID,
+	title,
+	videourl,
+	oplogurl,
+	description string,
+	duration int32,
+	videodescription interface{},
+) (*sqlc.Scrim, error) {
 	// string -> uuid
 	uid, err := uuid.Parse(userID)
 
 	if err != nil {
 		return nil, err
-	}
-
-	// string -> NullString
-	desc := sql.NullString{
-		String: description,
-		Valid:  description != "",
 	}
 
 	// interface{} -> JSONB
@@ -51,7 +55,10 @@ func (s *ScrimService) CreateScrim(ctx context.Context, userID, title, descripti
 	scrim, err := s.q.CreateScrim(ctx, sqlc.CreateScrimParams{
 		UserID:           uid,
 		Title:            title,
-		Description:      desc,
+		Description:      dto.ToNullString(description),
+		VideoUrl:         dto.ToNullString(videourl),
+		OplogUrl:         dto.ToNullString(oplogurl),
+		Duration:         dto.ToInt32(duration),
 		Videodescription: videoDesc,
 	})
 	if err != nil {
