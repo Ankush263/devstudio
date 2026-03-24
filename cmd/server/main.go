@@ -9,6 +9,7 @@ import (
 	"github.com/Ankush263/devstudio/internal/config"
 	"github.com/Ankush263/devstudio/internal/db"
 	"github.com/Ankush263/devstudio/internal/services"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -31,6 +32,8 @@ func main() {
 	scrimHandler := handlers.NewScrimHandler(scrimService)
 
 	r := gin.Default()
+
+	r.Use(cors.Default())
 
 	r.Use(gin.Logger())
 	r.Use(gin.Recovery())

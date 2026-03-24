@@ -4,6 +4,8 @@ go 1.25.5
 
 require github.com/lib/pq v1.12.0
 
+require github.com/gin-contrib/cors v1.7.6 // indirect
+
 require (
 	github.com/bytedance/gopkg v0.1.4 // indirect
 	github.com/bytedance/sonic v1.15.0 // indirect
