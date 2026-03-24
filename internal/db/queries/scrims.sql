@@ -7,7 +7,8 @@ RETURNING *;
 UPDATE scrims
 SET video_url = $2,
     oplog_url = $3,
-    duration = $4
+    duration = $4,
+    published = $5
 WHERE id = $1;
 
 -- name: GetScrimByID :one
@@ -15,3 +16,6 @@ SELECT * FROM scrims WHERE id = $1;
 
 -- name: ListScrims :many
 SELECT * FROM scrims WHERE published = true;
+
+-- name: GetScrimByUser :many
+SELECT * FROM scrims WHERE user_id = $1;

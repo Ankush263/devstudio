@@ -56,3 +56,13 @@ func ToInt32(i int32) sql.NullInt32 {
 		Valid: true,
 	}
 }
+
+func ToBool(b bool) sql.NullBool {
+	if !b {
+		return sql.NullBool{Valid: false}
+	}
+	return sql.NullBool{
+		Bool:  b,
+		Valid: true,
+	}
+}

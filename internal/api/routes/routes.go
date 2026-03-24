@@ -29,5 +29,6 @@ func SetupRoutes(r *gin.Engine, authHandler *handlers.AuthHandler, secret string
 	scrim.Use(middleware.AuthMiddleware(secret))
 	{
 		scrim.POST("/", scrimHandler.CreateScrim)
+		scrim.PATCH("/:scrimid", scrimHandler.AttachScrim)
 	}
 }

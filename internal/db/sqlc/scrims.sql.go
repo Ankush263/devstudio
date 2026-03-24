@@ -79,6 +79,45 @@ func (q *Queries) GetScrimByID(ctx context.Context, id uuid.UUID) (Scrim, error)
 	return i, err
 }
 
+const getScrimByUser = `-- name: GetScrimByUser :many
+SELECT id, user_id, title, description, videodescription, video_url, oplog_url, duration, published, created_at, updated_at FROM scrims WHERE user_id = $1
+`
+
+func (q *Queries) GetScrimByUser(ctx context.Context, userID uuid.UUID) ([]Scrim, error) {
+	rows, err := q.db.QueryContext(ctx, getScrimByUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Scrim
+	for rows.Next() {
+		var i Scrim
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Title,
+			&i.Description,
+			&i.Videodescription,
+			&i.VideoUrl,
+			&i.OplogUrl,
+			&i.Duration,
+			&i.Published,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listScrims = `-- name: ListScrims :many
 SELECT id, user_id, title, description, videodescription, video_url, oplog_url, duration, published, created_at, updated_at FROM scrims WHERE published = true
 `
@@ -122,15 +161,17 @@ const updateScrimAssets = `-- name: UpdateScrimAssets :exec
 UPDATE scrims
 SET video_url = $2,
     oplog_url = $3,
-    duration = $4
+    duration = $4,
+    published = $5
 WHERE id = $1
 `
 
 type UpdateScrimAssetsParams struct {
-	ID       uuid.UUID      `json:"id"`
-	VideoUrl sql.NullString `json:"video_url"`
-	OplogUrl sql.NullString `json:"oplog_url"`
-	Duration sql.NullInt32  `json:"duration"`
+	ID        uuid.UUID      `json:"id"`
+	VideoUrl  sql.NullString `json:"video_url"`
+	OplogUrl  sql.NullString `json:"oplog_url"`
+	Duration  sql.NullInt32  `json:"duration"`
+	Published sql.NullBool   `json:"published"`
 }
 
 func (q *Queries) UpdateScrimAssets(ctx context.Context, arg UpdateScrimAssetsParams) error {
@@ -139,6 +180,7 @@ func (q *Queries) UpdateScrimAssets(ctx context.Context, arg UpdateScrimAssetsPa
 		arg.VideoUrl,
 		arg.OplogUrl,
 		arg.Duration,
+		arg.Published,
 	)
 	return err
 }
