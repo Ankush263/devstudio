@@ -1,203 +1,340 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import Editor from '@monaco-editor/react';
 
 export default function App() {
 	const [code, setCode] = useState('// Start coding...');
 	const [isRecording, setIsRecording] = useState(false);
 	const [isPlaying, setIsPlaying] = useState(false);
-	//   const [readOnly, setReadOnly] = useState(false)
-	// const readOnly = isPlaying
 
+	// Refs for recording state (avoids stale closures in Monaco event handlers)
+	const isRecordingRef = useRef(false);
+	const isPlayingRef = useRef(false);
+
+	// Pause/resume refs
+	const pausedTimeRef = useRef(0);
+	const pausedIndexRef = useRef(0);
+	const pausedSnapshotRef = useRef('');
+
+	// Recording refs
 	const mediaRecorderRef = useRef(null);
 	const chunksRef = useRef([]);
 	const oplogRef = useRef([]);
 	const startTimeRef = useRef(0);
+	const editorRef = useRef(null);
 
+	// Playback refs
 	const audioRef = useRef(null);
+	const lastAppliedIndexRef = useRef(0);
+	const playbackIntervalRef = useRef(null);
+	const audioBlobURLRef = useRef(null);
+
 	const [savedData, setSavedData] = useState(null);
+
+	// Keep refs in sync with state
+	useEffect(() => {
+		isRecordingRef.current = isRecording;
+	}, [isRecording]);
+
+	useEffect(() => {
+		isPlayingRef.current = isPlaying;
+	}, [isPlaying]);
+
+	// Update Monaco readOnly when isPlaying changes
+	useEffect(() => {
+		if (editorRef.current) {
+			editorRef.current.updateOptions({ readOnly: isPlaying });
+		}
+	}, [isPlaying]);
 
 	// =========================
 	// RECORDING
 	// =========================
 
 	const startRecording = async () => {
-		const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+		try {
+			const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+			const recorder = new MediaRecorder(stream);
+			mediaRecorderRef.current = recorder;
 
-		const recorder = new MediaRecorder(stream);
-		mediaRecorderRef.current = recorder;
+			// Reset pause state
+			pausedTimeRef.current = 0;
+			pausedIndexRef.current = 0;
+			pausedSnapshotRef.current = '';
 
-		chunksRef.current = [];
-		oplogRef.current = [];
-		startTimeRef.current = Date.now();
+			chunksRef.current = [];
+			oplogRef.current = [];
+			startTimeRef.current = Date.now();
 
-		recorder.ondataavailable = (e) => {
-			chunksRef.current.push(e.data);
-		};
+			recorder.ondataavailable = (e) => {
+				if (e.data.size > 0) {
+					chunksRef.current.push(e.data);
+				}
+			};
 
-		recorder.start();
-		setIsRecording(true);
-	};
+			// Capture the initial editor state as the first oplog entry
+			const initialCode = editorRef.current
+				? editorRef.current.getValue()
+				: code;
 
-	const saveToBackend = async (data) => {
-		const reader = new FileReader();
-
-		reader.readAsDataURL(data.audioBlob);
-
-		reader.onloadend = async () => {
-			const base64Audio = reader.result;
-
-			await fetch('http://localhost:8000/api/scrims', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					title: 'test scrim',
-					description: 'testing',
-					videodescription: {
-						oplog: data.oplog,
-						audio: base64Audio, // optional
+			oplogRef.current.push({
+				time: 0,
+				changes: [
+					{
+						range: {
+							startLineNumber: 1,
+							startColumn: 1,
+							endLineNumber: 1,
+							endColumn: 1,
+						},
+						text: initialCode,
+						isInitial: true, // flag so playback knows this is a full-replace
 					},
-					videourl: 'temp',
-					oplogurl: 'temp',
-					duration: data.duration,
-				}),
+				],
 			});
-		};
+
+			recorder.start(100); // collect chunks every 100ms for smoother data
+			setIsRecording(true);
+		} catch (err) {
+			console.error('Failed to start recording:', err);
+			alert('Microphone access denied or unavailable.');
+		}
 	};
 
 	const stopRecording = () => {
+		if (!mediaRecorderRef.current) return;
+
 		mediaRecorderRef.current.stop();
 
-		mediaRecorderRef.current.onstop = async () => {
-			const audioBlob = new Blob(chunksRef.current, {
-				type: 'audio/webm',
-			});
+		// Stop all audio tracks so the mic indicator goes away
+		mediaRecorderRef.current.stream
+			.getTracks()
+			.forEach((t) => t.stop());
+
+		mediaRecorderRef.current.onstop = () => {
+			const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
 
 			const data = {
 				audioBlob,
-				oplog: oplogRef.current,
+				oplog: [...oplogRef.current],
 				duration: (Date.now() - startTimeRef.current) / 1000,
 			};
 
-			if (oplogRef.current.length === 0) {
-				oplogRef.current.push({
-					time: 0,
-					code,
-				});
-			}
-
-			console.log('data: ', data);
-
+			console.log('Recording saved:', data.oplog.length, 'ops,', data.duration.toFixed(1), 's');
 			setSavedData(data);
 
-			// 👉 API CALL (replace URL)
-			//   const formData = new FormData()
-			//   formData.append("audio", audioBlob)
-			//   formData.append("oplog", JSON.stringify(data.oplog))
-			//   formData.append("duration", data.duration)
-			saveToBackend(data);
-
-			console.log('data.oplog: ', data.oplog);
-
-			//   await fetch("http://localhost:8080/api/scrim", {
-			//     method: "POST",
-			//     body: formData
-			//   })
-
-			alert('Saved to backend');
+			// Optionally save to backend
+			// saveToBackend(data);
 		};
 
 		setIsRecording(false);
 	};
 
-	//   const saveStep = () => {
-	//     if (!isRecording) return
-
-	//     oplogRef.current.push({
-	//       time: (Date.now() - startTimeRef.current) / 1000,
-	//       code
-	//     })
-	//   }
-
-	useEffect(() => {
-		if (!isRecording) return;
-
-		const interval = setInterval(() => {
-			oplogRef.current.push({
-				time: (Date.now() - startTimeRef.current) / 1000,
-				code,
-			});
-		}, 300); // every 300ms → smooth typing effect
-
-		return () => clearInterval(interval);
-	}, [code, isRecording]);
-
-	useEffect(() => {
-		const audio = audioRef.current;
-		if (!audio) return;
-
-		const handlePlay = () => setIsPlaying(true);
-		const handlePause = () => setIsPlaying(false);
-		const handleEnded = () => setIsPlaying(false);
-
-		audio.addEventListener('play', handlePlay);
-		audio.addEventListener('pause', handlePause);
-		audio.addEventListener('ended', handleEnded);
-
-		return () => {
-			audio.removeEventListener('play', handlePlay);
-			audio.removeEventListener('pause', handlePause);
-			audio.removeEventListener('ended', handleEnded);
-		};
-	}, []);
-
 	// =========================
 	// PLAYBACK
 	// =========================
 
-	const applyOplog = (time) => {
-		if (!savedData) return;
+	const applyOplog = useCallback(
+		(currentTime) => {
+			if (!savedData || !editorRef.current) return;
 
-		let newCode = '';
+			const model = editorRef.current.getModel();
+			if (!model) return;
 
-		for (let op of savedData.oplog) {
-			if (op.time <= time) {
-				newCode = op.code;
+			while (
+				lastAppliedIndexRef.current < savedData.oplog.length &&
+				savedData.oplog[lastAppliedIndexRef.current].time <= currentTime
+			) {
+				const op = savedData.oplog[lastAppliedIndexRef.current];
+
+				// The first op (index 0) is a full-replace of the initial code
+				if (lastAppliedIndexRef.current === 0 && op.changes[0]?.isInitial) {
+					model.setValue(op.changes[0].text);
+				} else {
+					for (const change of op.changes) {
+						model.applyEdits([
+							{
+								range: new window.monaco.Range(
+									change.range.startLineNumber,
+									change.range.startColumn,
+									change.range.endLineNumber,
+									change.range.endColumn,
+								),
+								text: change.text,
+							},
+						]);
+					}
+				}
+
+				lastAppliedIndexRef.current++;
 			}
-		}
 
-		setCode(newCode);
-	};
+			setCode(model.getValue());
+		},
+		[savedData],
+	);
 
 	const play = () => {
-		if (!savedData) return;
+		if (!savedData || !editorRef.current || !audioRef.current) return;
 
-		const audioURL = URL.createObjectURL(savedData.audioBlob);
-		audioRef.current.src = audioURL;
-		audioRef.current.play();
+		const model = editorRef.current.getModel();
+		if (!model) return;
+
+		const resumeTime = pausedTimeRef.current || 0;
+		const resumeIndex = pausedIndexRef.current || 0;
+
+		// If resuming from pause, restore the exact paused snapshot
+		// If playing from start, rebuild from oplog[0]
+		if (resumeIndex > 0 && pausedSnapshotRef.current) {
+			model.setValue(pausedSnapshotRef.current);
+			setCode(pausedSnapshotRef.current);
+		} else {
+			// Playing from the beginning
+			const initialCode =
+				savedData.oplog?.[0]?.changes?.[0]?.text || '// Start coding...';
+			model.setValue(initialCode);
+			setCode(initialCode);
+		}
+
+		lastAppliedIndexRef.current = resumeIndex > 0 ? resumeIndex : 1; // skip initial op (already applied via setValue)
+
+		// Create blob URL if needed
+		if (audioBlobURLRef.current) {
+			URL.revokeObjectURL(audioBlobURLRef.current);
+		}
+		audioBlobURLRef.current = URL.createObjectURL(savedData.audioBlob);
+		audioRef.current.src = audioBlobURLRef.current;
+
+		setIsPlaying(true);
+
+		// Wait for audio to be ready, then seek and play
+		const onCanPlay = () => {
+			audioRef.current.removeEventListener('canplay', onCanPlay);
+			audioRef.current.currentTime = resumeTime;
+			audioRef.current.play().catch((err) => {
+				console.error('Audio play failed:', err);
+				setIsPlaying(false);
+			});
+		};
+
+		audioRef.current.addEventListener('canplay', onCanPlay);
+		// If already ready (e.g. same src), fire immediately
+		if (audioRef.current.readyState >= 3) {
+			audioRef.current.removeEventListener('canplay', onCanPlay);
+			audioRef.current.currentTime = resumeTime;
+			audioRef.current.play().catch((err) => {
+				console.error('Audio play failed:', err);
+				setIsPlaying(false);
+			});
+		}
 	};
 
 	const pause = () => {
-		audioRef.current.pause();
+		if (!audioRef.current || !editorRef.current) return;
 
-		// 🔥 force editor to become editable
-		setTimeout(() => {
-			setCode((prev) => prev);
-		}, 0);
+		// Save the exact playback position
+		pausedTimeRef.current = audioRef.current.currentTime;
+		pausedIndexRef.current = lastAppliedIndexRef.current;
+		pausedSnapshotRef.current = editorRef.current.getValue();
+
+		audioRef.current.pause();
+		setIsPlaying(false);
 	};
 
+	const restart = () => {
+		// Reset all pause state to replay from the beginning
+		pausedTimeRef.current = 0;
+		pausedIndexRef.current = 0;
+		pausedSnapshotRef.current = '';
+		lastAppliedIndexRef.current = 0;
+
+		if (audioRef.current) {
+			audioRef.current.pause();
+			audioRef.current.currentTime = 0;
+		}
+
+		setIsPlaying(false);
+
+		// Reset editor to initial state
+		if (savedData && editorRef.current) {
+			const initialCode =
+				savedData.oplog?.[0]?.changes?.[0]?.text || '// Start coding...';
+			editorRef.current.getModel()?.setValue(initialCode);
+			setCode(initialCode);
+		}
+	};
+
+	// Playback sync interval — applies oplog entries as audio progresses
 	useEffect(() => {
-		if (!audioRef.current || !savedData) return;
+		if (isPlaying && savedData) {
+			playbackIntervalRef.current = setInterval(() => {
+				if (audioRef.current && !audioRef.current.paused) {
+					applyOplog(audioRef.current.currentTime);
+				}
+			}, 50); // 50ms for smoother playback
+		}
 
-		const interval = setInterval(() => {
-			if (audioRef.current && !audioRef.current.paused) {
-				applyOplog(audioRef.current.currentTime);
+		return () => {
+			if (playbackIntervalRef.current) {
+				clearInterval(playbackIntervalRef.current);
+				playbackIntervalRef.current = null;
 			}
-		}, 200);
+		};
+	}, [isPlaying, savedData, applyOplog]);
 
-		return () => clearInterval(interval);
-	}, [savedData]);
+	// Listen for audio ending
+	useEffect(() => {
+		const audio = audioRef.current;
+		if (!audio) return;
+
+		const handleEnded = () => {
+			setIsPlaying(false);
+			// Apply any remaining ops
+			if (savedData) {
+				applyOplog(Infinity);
+			}
+		};
+
+		audio.addEventListener('ended', handleEnded);
+		return () => audio.removeEventListener('ended', handleEnded);
+	}, [savedData, applyOplog]);
+
+	// Cleanup blob URLs on unmount
+	useEffect(() => {
+		return () => {
+			if (audioBlobURLRef.current) {
+				URL.revokeObjectURL(audioBlobURLRef.current);
+			}
+		};
+	}, []);
+
+	// =========================
+	// EDITOR MOUNT
+	// =========================
+
+	const handleEditorMount = (editor) => {
+		editorRef.current = editor;
+
+		// Capture every content change during recording
+		editor.onDidChangeModelContent((event) => {
+			// Use ref, not state — this closure would otherwise be stale
+			if (!isRecordingRef.current) return;
+
+			const changes = event.changes.map((c) => ({
+				range: {
+					startLineNumber: c.range.startLineNumber,
+					startColumn: c.range.startColumn,
+					endLineNumber: c.range.endLineNumber,
+					endColumn: c.range.endColumn,
+				},
+				text: c.text,
+			}));
+
+			oplogRef.current.push({
+				time: (Date.now() - startTimeRef.current) / 1000,
+				changes,
+			});
+		});
+	};
 
 	// =========================
 	// UI
@@ -208,12 +345,15 @@ export default function App() {
 			<h2>Scrim MVP</h2>
 
 			<Editor
-				key={isPlaying ? 'readonly' : 'editable'} // 🔥 FORCE REMOUNT
+				onMount={handleEditorMount}
 				height="400px"
 				defaultLanguage="javascript"
-				value={code}
+				defaultValue={code}
 				onChange={(val) => {
-					if (!isPlaying) setCode(val || '');
+					// Only allow user edits to update state when NOT playing
+					if (!isPlayingRef.current) {
+						setCode(val || '');
+					}
 				}}
 				options={{
 					readOnly: isPlaying,
@@ -222,29 +362,101 @@ export default function App() {
 				}}
 			/>
 
-			<div style={{ marginTop: 10 }}>
-				{/* Recording */}
-				<button onClick={startRecording} disabled={isRecording}>
-					Start Recording
+			<div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
+				{/* Recording controls */}
+				<button
+					onClick={startRecording}
+					disabled={isRecording || isPlaying}
+					style={{
+						background: isRecording ? '#ccc' : '#e74c3c',
+						color: 'white',
+						border: 'none',
+						padding: '8px 16px',
+						borderRadius: 4,
+						cursor: isRecording || isPlaying ? 'not-allowed' : 'pointer',
+					}}
+				>
+					⏺ Start Recording
 				</button>
 
-				<button onClick={stopRecording} disabled={!isRecording}>
-					Stop Recording
+				<button
+					onClick={stopRecording}
+					disabled={!isRecording}
+					style={{
+						background: !isRecording ? '#ccc' : '#333',
+						color: 'white',
+						border: 'none',
+						padding: '8px 16px',
+						borderRadius: 4,
+						cursor: !isRecording ? 'not-allowed' : 'pointer',
+					}}
+				>
+					⏹ Stop Recording
 				</button>
 
-				<button disabled={!isRecording}>Save Step</button>
+				<div style={{ width: 1, background: '#ccc', margin: '0 4px' }} />
 
-				{/* Playback */}
-				<button onClick={play} disabled={!savedData || isPlaying}>
-					Play
+				{/* Playback controls */}
+				<button
+					onClick={play}
+					disabled={!savedData || isPlaying || isRecording}
+					style={{
+						background:
+							!savedData || isPlaying || isRecording ? '#ccc' : '#27ae60',
+						color: 'white',
+						border: 'none',
+						padding: '8px 16px',
+						borderRadius: 4,
+						cursor:
+							!savedData || isPlaying || isRecording
+								? 'not-allowed'
+								: 'pointer',
+					}}
+				>
+					{/* eslint-disable-next-line react-hooks/refs */}
+					▶ {pausedTimeRef.current > 0 && !isPlaying ? 'Resume' : 'Play'}
 				</button>
 
-				<button onClick={pause} disabled={!isPlaying}>
-					Pause
+				<button
+					onClick={pause}
+					disabled={!isPlaying}
+					style={{
+						background: !isPlaying ? '#ccc' : '#f39c12',
+						color: 'white',
+						border: 'none',
+						padding: '8px 16px',
+						borderRadius: 4,
+						cursor: !isPlaying ? 'not-allowed' : 'pointer',
+					}}
+				>
+					⏸ Pause
+				</button>
+
+				<button
+					onClick={restart}
+					disabled={!savedData || isRecording}
+					style={{
+						background: !savedData || isRecording ? '#ccc' : '#8e44ad',
+						color: 'white',
+						border: 'none',
+						padding: '8px 16px',
+						borderRadius: 4,
+						cursor: !savedData || isRecording ? 'not-allowed' : 'pointer',
+					}}
+				>
+					⏮ Restart
 				</button>
 			</div>
 
-			<audio ref={audioRef} controls style={{ marginTop: 10 }} />
+			{isRecording && (
+				<div style={{ marginTop: 8, color: '#e74c3c', fontWeight: 'bold' }}>
+					{/*  eslint-disable-next-line react-hooks/refs */}
+					🔴 Recording... ({oplogRef.current.length} ops captured)
+				</div>
+			)}
+
+			<audio ref={audioRef} controls style={{ marginTop: 10, width: '100%' }} />
+
 			<iframe
 				title="preview"
 				style={{
@@ -254,29 +466,27 @@ export default function App() {
 					marginTop: '10px',
 				}}
 				srcDoc={`
-            <html>
-            <body>
-                <div id="root"></div>
-                <script>
-                const root = document.getElementById('root');
-
-                const log = console.log;
-                console.log = function(...args) {
-                    const el = document.createElement('div');
-                    el.innerText = args.join(' ');
-                    root.appendChild(el);
-                    log(...args);
-                };
-
-                try {
-                    ${code}
-                } catch (e) {
-                    root.innerHTML = "<pre>" + e + "</pre>";
-                }
-                </script>
-            </body>
-            </html>
-        `}
+					<html>
+					<body>
+						<div id="root"></div>
+						<script>
+						const root = document.getElementById('root');
+						const log = console.log;
+						console.log = function(...args) {
+							const el = document.createElement('div');
+							el.innerText = args.join(' ');
+							root.appendChild(el);
+							log(...args);
+						};
+						try {
+							${code}
+						} catch (e) {
+							root.innerHTML = "<pre>" + e + "</pre>";
+						}
+						</script>
+					</body>
+					</html>
+				`}
 			/>
 		</div>
 	);
