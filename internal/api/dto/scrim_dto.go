@@ -7,7 +7,7 @@ import (
 
 type scrimResponse struct {
 	ID               uuid.UUID   `json:"id"`
-	UserID           string      `json:"string"`
+	UserID           string      `json:"userid"`
 	Title            string      `json:"title"`
 	Description      string      `json:"description"`
 	Videodescription interface{} `json:"videodescription"`

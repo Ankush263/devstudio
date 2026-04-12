@@ -24,6 +24,20 @@ type Scrim struct {
 	Published        sql.NullBool          `json:"published"`
 	CreatedAt        sql.NullTime          `json:"created_at"`
 	UpdatedAt        sql.NullTime          `json:"updated_at"`
+	Mode             sql.NullString        `json:"mode"`
+	Files            pqtype.NullRawMessage `json:"files"`
+}
+
+type Scrimfile struct {
+	ID          uuid.UUID             `json:"id"`
+	ScrimID     uuid.UUID             `json:"scrim_id"`
+	Filename    string                `json:"filename"`
+	Language    string                `json:"language"`
+	Location    string                `json:"location"`
+	Content     string                `json:"content"`
+	Description pqtype.NullRawMessage `json:"description"`
+	CreatedAt   sql.NullTime          `json:"created_at"`
+	UpdatedAt   sql.NullTime          `json:"updated_at"`
 }
 
 type User struct {

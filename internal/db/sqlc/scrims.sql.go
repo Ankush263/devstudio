@@ -16,7 +16,7 @@ import (
 const createScrim = `-- name: CreateScrim :one
 INSERT INTO scrims (user_id, title, description, video_url, oplog_url, duration, videodescription)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, user_id, title, description, videodescription, video_url, oplog_url, duration, published, created_at, updated_at
+RETURNING id, user_id, title, description, videodescription, video_url, oplog_url, duration, published, created_at, updated_at, mode, files
 `
 
 type CreateScrimParams struct {
@@ -52,12 +52,14 @@ func (q *Queries) CreateScrim(ctx context.Context, arg CreateScrimParams) (Scrim
 		&i.Published,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Mode,
+		&i.Files,
 	)
 	return i, err
 }
 
 const getScrimByID = `-- name: GetScrimByID :one
-SELECT id, user_id, title, description, videodescription, video_url, oplog_url, duration, published, created_at, updated_at FROM scrims WHERE id = $1
+SELECT id, user_id, title, description, videodescription, video_url, oplog_url, duration, published, created_at, updated_at, mode, files FROM scrims WHERE id = $1
 `
 
 func (q *Queries) GetScrimByID(ctx context.Context, id uuid.UUID) (Scrim, error) {
@@ -75,12 +77,14 @@ func (q *Queries) GetScrimByID(ctx context.Context, id uuid.UUID) (Scrim, error)
 		&i.Published,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Mode,
+		&i.Files,
 	)
 	return i, err
 }
 
 const getScrimByUser = `-- name: GetScrimByUser :many
-SELECT id, user_id, title, description, videodescription, video_url, oplog_url, duration, published, created_at, updated_at FROM scrims WHERE user_id = $1
+SELECT id, user_id, title, description, videodescription, video_url, oplog_url, duration, published, created_at, updated_at, mode, files FROM scrims WHERE user_id = $1
 `
 
 func (q *Queries) GetScrimByUser(ctx context.Context, userID uuid.UUID) ([]Scrim, error) {
@@ -104,6 +108,8 @@ func (q *Queries) GetScrimByUser(ctx context.Context, userID uuid.UUID) ([]Scrim
 			&i.Published,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Mode,
+			&i.Files,
 		); err != nil {
 			return nil, err
 		}
@@ -119,7 +125,7 @@ func (q *Queries) GetScrimByUser(ctx context.Context, userID uuid.UUID) ([]Scrim
 }
 
 const listScrims = `-- name: ListScrims :many
-SELECT id, user_id, title, description, videodescription, video_url, oplog_url, duration, published, created_at, updated_at FROM scrims WHERE published = true
+SELECT id, user_id, title, description, videodescription, video_url, oplog_url, duration, published, created_at, updated_at, mode, files FROM scrims WHERE published = true
 `
 
 func (q *Queries) ListScrims(ctx context.Context) ([]Scrim, error) {
@@ -143,6 +149,8 @@ func (q *Queries) ListScrims(ctx context.Context) ([]Scrim, error) {
 			&i.Published,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Mode,
+			&i.Files,
 		); err != nil {
 			return nil, err
 		}

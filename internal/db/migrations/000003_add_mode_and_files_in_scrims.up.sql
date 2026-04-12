@@ -1,0 +1,2 @@
+ALTER TABLE scrims ADD COLUMN mode TEXT;
+ALTER TABLE scrims ADD COLUMN files JSONB DEFAULT '{}'::jsonb;

@@ -1,0 +1,2 @@
+ALTER TABLE scrims DROP COLUMN mode;
+ALTER TABLE scrims DROP COLUMN files;
