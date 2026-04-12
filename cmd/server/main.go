@@ -31,6 +31,9 @@ func main() {
 	scrimService := services.NewScrimService(database)
 	scrimHandler := handlers.NewScrimHandler(scrimService)
 
+	scrimFilesService := services.NewScrimFilesService(database)
+	scrimFilesHandler := handlers.NewScrimFilesHandler(scrimFilesService)
+
 	r := gin.Default()
 
 	r.Use(cors.Default())
@@ -39,7 +42,7 @@ func main() {
 	r.Use(gin.Recovery())
 	r.Use(middleware.ErrorHandler())
 
-	routes.SetupRoutes(r, authHandler, cfg.JWTSecret, scrimHandler)
+	routes.SetupRoutes(r, authHandler, cfg.JWTSecret, scrimHandler, scrimFilesHandler)
 
 	log.Println("Server running on port", cfg.Port)
 	r.Run(":" + cfg.Port)

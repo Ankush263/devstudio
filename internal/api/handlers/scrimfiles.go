@@ -55,14 +55,15 @@ func (h *ScrimFilesHandler) CreateScrimFiles(c *gin.Context) {
 }
 
 func (h *ScrimFilesHandler) GetScrimFilesByScrimID(c *gin.Context) {
-	var req ScrimFilesRequest
+	scrimIDParam := c.Param("scrimid")
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, 400, "invalid request")
+	scrimID, err := uuid.Parse(scrimIDParam)
+	if err != nil {
+		response.Error(c, 400, "invalid scrimid")
 		return
 	}
 
-	scrimfiles, err := h.scrimFilesService.GetScrimFilesByScrimID(c, req.ScrimID)
+	scrimfiles, err := h.scrimFilesService.GetScrimFilesByScrimID(c, scrimID)
 
 	if err != nil {
 		response.Error(c, 500, "failed to get scrim files")
