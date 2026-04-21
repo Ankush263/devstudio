@@ -248,6 +248,72 @@ try{${js}}catch(e){_out('✕ '+e,'#f44747');}
 }
 
 // ─────────────────────────────────────────────
+//  SAVE MODAL
+// ─────────────────────────────────────────────
+function SaveModal({ defaultTitle, onSave, onCancel, loading }) {
+	const [title, setTitle] = useState(defaultTitle || '');
+	const [description, setDescription] = useState('');
+
+	return (
+		<Dialog open onOpenChange={() => onCancel()}>
+			<DialogContent className="bg-zinc-950 border-blue-800/50 text-zinc-100 font-mono w-96 shadow-2xl shadow-black/80">
+				<DialogHeader>
+					<DialogTitle className="text-blue-400 flex items-center gap-2 text-sm">
+						<Square className="w-4 h-4 fill-red-500 text-red-500" />
+						Save Recording
+					</DialogTitle>
+					<DialogDescription className="text-zinc-400 text-[11px] leading-relaxed">
+						Recording stopped. Give your scrim a name and description before saving.
+					</DialogDescription>
+				</DialogHeader>
+
+				<div className="flex flex-col gap-3 py-1">
+					<div className="flex flex-col gap-1.5">
+						<Label className="text-[10px] font-mono tracking-widest uppercase text-zinc-500">
+							Title <span className="text-red-400">*</span>
+						</Label>
+						<Input
+							value={title}
+							onChange={(e) => setTitle(e.target.value)}
+							placeholder="My awesome scrim"
+							className="bg-zinc-900 border-zinc-800 text-zinc-200 font-mono text-[12px] h-9 focus-visible:ring-blue-500/50 focus-visible:border-blue-500/50"
+						/>
+					</div>
+					<div className="flex flex-col gap-1.5">
+						<Label className="text-[10px] font-mono tracking-widest uppercase text-zinc-500">
+							Description
+						</Label>
+						<Input
+							value={description}
+							onChange={(e) => setDescription(e.target.value)}
+							placeholder="What does this scrim cover?"
+							className="bg-zinc-900 border-zinc-800 text-zinc-200 font-mono text-[12px] h-9 focus-visible:ring-blue-500/50 focus-visible:border-blue-500/50"
+						/>
+					</div>
+				</div>
+
+				<DialogFooter className="gap-2">
+					<Button
+						variant="outline"
+						onClick={onCancel}
+						className="flex-1 font-mono text-[11px] tracking-widest uppercase border-zinc-700 bg-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 h-9"
+					>
+						Discard
+					</Button>
+					<Button
+						onClick={() => onSave({ title, description })}
+						disabled={loading || !title.trim()}
+						className="flex-1 font-mono text-[11px] tracking-widest uppercase bg-blue-500 hover:bg-blue-400 text-zinc-950 font-bold h-9"
+					>
+						{loading ? '···' : 'Save Scrim'}
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
+	);
+}
+
+// ─────────────────────────────────────────────
 //  FORK MODAL
 // ─────────────────────────────────────────────
 function ForkModal({ scrim, onFork, onCancel, loading }) {
@@ -433,6 +499,11 @@ export default function Scrim() {
 	const [savedData, setSavedData] = useState(null);
 	const [recordingStartTime, setRecordingStartTime] = useState(0);
 
+	// ── save modal ──
+	const [showSaveModal, setShowSaveModal] = useState(false);
+	const [saveLoading, setSaveLoading] = useState(false);
+	const [pendingSaveData, setPendingSaveData] = useState(null);
+
 	// ── fork ──
 	const [showForkModal, setShowForkModal] = useState(false);
 	const [forkLoading, setForkLoading] = useState(false);
@@ -533,20 +604,39 @@ export default function Scrim() {
 				duration: (Date.now() - startTimeRef.current) / 1000,
 			};
 			setSavedData(data);
-			if (activeScrim) saveScrimToAPI(data);
+			if (activeScrim) {
+				setPendingSaveData(data);
+				setShowSaveModal(true);
+			}
 		};
 		setIsRecording(false);
 	};
 
-	const saveScrimToAPI = async (data) => {
-		if (!activeScrim) return;
+	const handleSaveScrim = async ({ title, description }) => {
+		if (!activeScrim || !pendingSaveData) return;
+		setSaveLoading(true);
 		try {
 			await api(`/scrims/${activeScrim.id}`, {
 				method: 'PATCH',
-				body: JSON.stringify({ duration: Math.ceil(data.duration) }),
+				body: JSON.stringify({
+					title: title.trim(),
+					description: description.trim(),
+					duration: Math.ceil(pendingSaveData.duration),
+					videodescription: { oplog: pendingSaveData.oplog },
+				}),
 			});
+			setActiveScrim((prev) => ({ ...prev, title: title.trim() }));
+			setScrims((prev) =>
+				prev.map((s) =>
+					s.id === activeScrim.id ? { ...s, title: title.trim() } : s,
+				),
+			);
+			setShowSaveModal(false);
+			setPendingSaveData(null);
 		} catch (e) {
-			console.error('Failed to save scrim metadata:', e);
+			console.error('Failed to save scrim:', e);
+		} finally {
+			setSaveLoading(false);
 		}
 	};
 
@@ -880,6 +970,18 @@ export default function Scrim() {
 			{!user && (
 				<AuthModal
 					onAuth={(d) => setUser(d.user || { username: 'User', email: '' })}
+				/>
+			)}
+
+			{showSaveModal && activeScrim && (
+				<SaveModal
+					defaultTitle={activeScrim.title}
+					onSave={handleSaveScrim}
+					onCancel={() => {
+						setShowSaveModal(false);
+						setPendingSaveData(null);
+					}}
+					loading={saveLoading}
 				/>
 			)}
 

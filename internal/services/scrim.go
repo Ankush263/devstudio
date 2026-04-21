@@ -26,9 +26,9 @@ func (s *ScrimService) CreateScrim(
 	ctx context.Context,
 	userID,
 	title,
+	description,
 	videourl,
-	oplogurl,
-	description string,
+	oplogurl string,
 	duration int32,
 	videodescription interface{},
 ) (*sqlc.Scrim, error) {
@@ -75,10 +75,13 @@ func (s *ScrimService) AttachScrim(
 	ctx context.Context,
 	userID,
 	scrimID,
+	title,
+	description,
 	videoURL,
 	oplogURL string,
 	duration int32,
 	publish bool,
+	videodescription interface{},
 ) (string, error) {
 	userid, err := uuid.Parse(userID)
 
@@ -94,6 +97,9 @@ func (s *ScrimService) AttachScrim(
 	}
 
 	scrimIDUUID, err := uuid.Parse(scrimID)
+	if err != nil {
+		return "", err
+	}
 
 	found := false
 	for _, scrim := range scrims {
@@ -109,18 +115,31 @@ func (s *ScrimService) AttachScrim(
 		return "", errors.New("only owner can update the scrim")
 	}
 
-	if err != nil {
-		return "", err
+	// interface{} -> JSONB
+	var videoJSON []byte
+	if videodescription != nil {
+		videoJSON, err = json.Marshal(videodescription)
+		if err != nil {
+			return "", err
+		}
 	}
 
-	err = s.q.UpdateScrimAssets(
+	videoDesc := pqtype.NullRawMessage{
+		RawMessage: videoJSON,
+		Valid:       videodescription != nil,
+	}
+
+	err = s.q.UpdateScrim(
 		ctx,
-		sqlc.UpdateScrimAssetsParams{
-			ID:        scrimIDUUID,
-			VideoUrl:  dto.ToNullString(videoURL),
-			OplogUrl:  dto.ToNullString(oplogURL),
-			Duration:  dto.ToInt32(duration),
-			Published: dto.ToBool(publish),
+		sqlc.UpdateScrimParams{
+			ID:               scrimIDUUID,
+			Title:            title,
+			Description:      dto.ToNullString(description),
+			VideoUrl:         dto.ToNullString(videoURL),
+			OplogUrl:         dto.ToNullString(oplogURL),
+			Duration:         dto.ToInt32(duration),
+			Published:        dto.ToBool(publish),
+			Videodescription: videoDesc,
 		},
 	)
 	if err != nil {

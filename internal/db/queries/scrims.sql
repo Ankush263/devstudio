@@ -11,6 +11,17 @@ SET video_url = $2,
     published = $5
 WHERE id = $1;
 
+-- name: UpdateScrim :exec
+UPDATE scrims
+SET title = $2,
+    description = $3,
+    video_url = $4,
+    oplog_url = $5,
+    duration = $6,
+    published = $7,
+    videodescription = $8
+WHERE id = $1;
+
 -- name: GetScrimByID :one
 SELECT * FROM scrims WHERE id = $1;
 

@@ -165,6 +165,43 @@ func (q *Queries) ListScrims(ctx context.Context) ([]Scrim, error) {
 	return items, nil
 }
 
+const updateScrim = `-- name: UpdateScrim :exec
+UPDATE scrims
+SET title = $2,
+    description = $3,
+    video_url = $4,
+    oplog_url = $5,
+    duration = $6,
+    published = $7,
+    videodescription = $8
+WHERE id = $1
+`
+
+type UpdateScrimParams struct {
+	ID               uuid.UUID             `json:"id"`
+	Title            string                `json:"title"`
+	Description      sql.NullString        `json:"description"`
+	VideoUrl         sql.NullString        `json:"video_url"`
+	OplogUrl         sql.NullString        `json:"oplog_url"`
+	Duration         sql.NullInt32         `json:"duration"`
+	Published        sql.NullBool          `json:"published"`
+	Videodescription pqtype.NullRawMessage `json:"videodescription"`
+}
+
+func (q *Queries) UpdateScrim(ctx context.Context, arg UpdateScrimParams) error {
+	_, err := q.db.ExecContext(ctx, updateScrim,
+		arg.ID,
+		arg.Title,
+		arg.Description,
+		arg.VideoUrl,
+		arg.OplogUrl,
+		arg.Duration,
+		arg.Published,
+		arg.Videodescription,
+	)
+	return err
+}
+
 const updateScrimAssets = `-- name: UpdateScrimAssets :exec
 UPDATE scrims
 SET video_url = $2,

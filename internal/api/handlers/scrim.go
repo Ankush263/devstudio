@@ -18,10 +18,10 @@ func NewScrimHandler(s *services.ScrimService) *ScrimHandler {
 }
 
 type ScrimRequest struct {
-	Title            string      `json:"title" validate:"required"`
+	Title            string      `json:"title"`
 	Description      string      `json:"description"`
 	VideoURL         string      `json:"videourl"`
-	OplogURL         string      `josn:"oplogurl"`
+	OplogURL         string      `json:"oplogurl"`
 	Duration         int32       `json:"duration"`
 	Videodescription interface{} `json:"videodescription"`
 	ScrimID          string      `json:"scrimid"`
@@ -48,6 +48,7 @@ func (h *ScrimHandler) CreateScrim(c *gin.Context) {
 		req.Duration,
 		req.Videodescription,
 	)
+
 	if err != nil {
 		response.Error(c, 500, "failed to create scrim")
 		return
@@ -70,10 +71,13 @@ func (h *ScrimHandler) AttachScrim(c *gin.Context) {
 		c,
 		string(userID),
 		c.Param("scrimid"),
+		req.Title,
+		req.Description,
 		req.VideoURL,
 		req.OplogURL,
 		req.Duration,
 		req.Published,
+		req.Videodescription,
 	)
 
 	if err != nil {
