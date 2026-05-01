@@ -66,6 +66,7 @@ function AuthModal({ onAuth }) {
 	const [form, setForm] = useState({ username: '', email: '', password: '' });
 	const [error, setError] = useState('');
 	const [loading, setLoading] = useState(false);
+	const [showPassword, setShowPassword] = useState(false);
 
 	const submit = async () => {
 		setError('');
@@ -95,90 +96,221 @@ function AuthModal({ onAuth }) {
 		}
 	};
 
+	const handleKeyDown = (e) => {
+		if (e.key === 'Enter' && !loading) submit();
+	};
+
 	return (
-		<div className="fixed inset-0 z-99999 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-			<div className="w-95 rounded-xl border border-zinc-800 bg-zinc-950 p-8 shadow-2xl shadow-black/60 flex flex-col gap-5">
-				{/* Logo */}
-				<div className="flex items-center justify-center gap-2 mb-1">
-					<Hexagon
-						className="w-5 h-5 text-blue-400 fill-blue-400/20"
-						strokeWidth={1.5}
-					/>
-					<span className="font-mono text-lg font-bold tracking-[0.2em] text-zinc-100">
-						SCRIM
-					</span>
-				</div>
-
-				{/* Tab toggle */}
-				<div className="flex rounded-lg bg-zinc-900 p-1 gap-1">
-					{['login', 'signup'].map((m) => (
-						<button
-							key={m}
-							onClick={() => setMode(m)}
-							className={cn(
-								'flex-1 py-1.5 rounded-md text-[11px] font-mono font-semibold tracking-widest uppercase transition-all duration-150',
-								mode === m
-									? 'bg-blue-500 text-zinc-950 shadow-sm'
-									: 'text-zinc-500 hover:text-zinc-300',
-							)}
-						>
-							{m}
-						</button>
-					))}
-				</div>
-
-				{/* Fields */}
-				<div className="flex flex-col gap-4">
-					{mode === 'signup' && (
-						<AuthField
-							label="Username"
-							value={form.username}
-							onChange={(v) => setForm((f) => ({ ...f, username: v }))}
-						/>
-					)}
-					<AuthField
-						label="Email"
-						type="email"
-						value={form.email}
-						onChange={(v) => setForm((f) => ({ ...f, email: v }))}
-					/>
-					<AuthField
-						label="Password"
-						type="password"
-						value={form.password}
-						onChange={(v) => setForm((f) => ({ ...f, password: v }))}
-					/>
-				</div>
-
-				{error && (
-					<p className="text-red-400 text-[11px] font-mono bg-red-950/30 border border-red-900/50 rounded px-3 py-2">
-						{error}
-					</p>
-				)}
-
-				<Button
-					onClick={submit}
-					disabled={loading}
-					className="w-full font-mono tracking-widest text-xs uppercase bg-blue-500 hover:bg-blue-400 text-zinc-950 font-bold h-9"
+		<>
+			<style>{`
+				@keyframes auth-slide-up {
+					from { opacity: 0; transform: translateY(20px) scale(0.97); }
+					to   { opacity: 1; transform: translateY(0)   scale(1); }
+				}
+				@keyframes auth-fade-in {
+					from { opacity: 0; }
+					to   { opacity: 1; }
+				}
+				.auth-backdrop { animation: auth-fade-in 0.2s ease forwards; }
+				.auth-card     { animation: auth-slide-up 0.28s cubic-bezier(0.22,1,0.36,1) forwards; }
+				.auth-tab-active { position: relative; }
+				.auth-input:focus { border-color: rgba(96,165,250,0.6) !important; box-shadow: 0 0 0 3px rgba(59,130,246,0.15) !important; }
+				.auth-btn-primary {
+					background: linear-gradient(135deg, #3b82f6, #6366f1);
+					transition: all 0.2s ease;
+				}
+				.auth-btn-primary:hover:not(:disabled) {
+					background: linear-gradient(135deg, #2563eb, #4f46e5);
+					transform: translateY(-1px);
+					box-shadow: 0 4px 20px rgba(99,102,241,0.4);
+				}
+				.auth-btn-primary:active:not(:disabled) { transform: translateY(0); }
+				.auth-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+				.auth-mode-btn { transition: all 0.2s cubic-bezier(0.22,1,0.36,1); }
+				.auth-error { animation: auth-slide-up 0.2s ease forwards; }
+			`}</style>
+			<div className="auth-backdrop fixed inset-0 z-[99999] flex items-center justify-center"
+				style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(12px)' }}>
+				<div
+					className="auth-card relative w-full max-w-sm mx-4 rounded-2xl flex flex-col overflow-hidden"
+					style={{
+						background: 'linear-gradient(160deg, #18181b 0%, #09090b 100%)',
+						border: '1px solid rgba(255,255,255,0.07)',
+						boxShadow: '0 25px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(59,130,246,0.08), inset 0 1px 0 rgba(255,255,255,0.04)',
+					}}
 				>
-					{loading ? '···' : mode}
-				</Button>
+					{/* Top gradient accent bar */}
+					<div style={{
+						height: '2px',
+						background: 'linear-gradient(90deg, transparent, #3b82f6, #6366f1, transparent)',
+					}} />
+
+					<div className="p-8 flex flex-col gap-6">
+						{/* Logo */}
+						<div className="flex flex-col items-center gap-3 mb-1">
+							<div style={{
+								width: 48, height: 48, borderRadius: 14,
+								background: 'linear-gradient(135deg, rgba(59,130,246,0.15), rgba(99,102,241,0.1))',
+								border: '1px solid rgba(59,130,246,0.25)',
+								display: 'flex', alignItems: 'center', justifyContent: 'center',
+								boxShadow: '0 0 20px rgba(59,130,246,0.15)',
+							}}>
+								<Hexagon className="w-6 h-6 text-blue-400" strokeWidth={1.5}
+									style={{ fill: 'rgba(59,130,246,0.2)' }} />
+							</div>
+							<div className="text-center">
+								<div className="font-mono text-xl font-bold tracking-[0.25em] text-white" style={{
+									background: 'linear-gradient(90deg,#93c5fd,#a5b4fc)',
+									WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+								}}>SCRIM</div>
+								<div className="text-zinc-500 text-[11px] mt-0.5 tracking-wider">
+									{mode === 'login' ? 'Welcome back' : 'Create your account'}
+								</div>
+							</div>
+						</div>
+
+						{/* Tab toggle */}
+						<div className="flex rounded-xl p-1 gap-1" style={{
+							background: 'rgba(255,255,255,0.04)',
+							border: '1px solid rgba(255,255,255,0.06)',
+						}}>
+							{['login', 'signup'].map((m) => (
+								<button
+									key={m}
+									onClick={() => { setMode(m); setError(''); }}
+									className="auth-mode-btn flex-1 py-2.5 px-4 rounded-lg text-[11px] font-mono font-semibold tracking-widest uppercase text-center"
+									style={mode === m ? {
+										background: 'linear-gradient(135deg, #3b82f6, #6366f1)',
+										color: '#fff',
+										boxShadow: '0 2px 12px rgba(99,102,241,0.35)',
+									} : {
+										color: 'rgba(161,161,170,0.8)',
+										background: 'transparent',
+									}}
+								>
+									{m}
+								</button>
+							))}
+						</div>
+
+						{/* Fields */}
+						<div className="flex flex-col gap-4" onKeyDown={handleKeyDown}>
+							{mode === 'signup' && (
+								<AuthField
+									label="Username"
+									value={form.username}
+									onChange={(v) => setForm((f) => ({ ...f, username: v }))}
+									placeholder="your_username"
+									autoFocus
+								/>
+							)}
+							<AuthField
+								label="Email"
+								type="email"
+								value={form.email}
+								onChange={(v) => setForm((f) => ({ ...f, email: v }))}
+								placeholder="you@example.com"
+								autoFocus={mode === 'login'}
+							/>
+							<AuthField
+								label="Password"
+								type={showPassword ? 'text' : 'password'}
+								value={form.password}
+								onChange={(v) => setForm((f) => ({ ...f, password: v }))}
+								placeholder="••••••••"
+								rightAction={
+									<button
+										type="button"
+										onClick={() => setShowPassword((s) => !s)}
+										style={{ color: 'rgba(113,113,122,0.8)', fontSize: 10, fontFamily: 'monospace',
+											background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', letterSpacing: '0.05em' }}
+									>
+										{showPassword ? 'HIDE' : 'SHOW'}
+									</button>
+								}
+							/>
+						</div>
+
+						{/* Error */}
+						{error && (
+							<div className="auth-error flex items-start gap-2.5 rounded-xl px-3.5 py-3" style={{
+								background: 'rgba(220,38,38,0.08)',
+								border: '1px solid rgba(239,68,68,0.2)',
+							}}>
+								<span style={{ color: '#f87171', fontSize: 12, lineHeight: 1.5, fontFamily: 'monospace' }}>
+									⚠ {error}
+								</span>
+							</div>
+						)}
+
+						{/* Submit */}
+						<button
+							onClick={submit}
+							disabled={loading}
+							className="auth-btn-primary w-full font-mono uppercase font-bold text-white rounded-xl"
+							style={{ height: 44, border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
+								fontSize: 11, letterSpacing: '0.18em', padding: '0 16px' }}
+						>
+							{loading ? (
+								<span style={{ letterSpacing: '0.3em' }}>···</span>
+							) : (
+								mode === 'login' ? 'Sign In →' : 'Create Account →'
+							)}
+						</button>
+
+						{/* Footer toggle hint */}
+						<p style={{ textAlign: 'center', fontSize: 11, color: 'rgba(113,113,122,0.7)', fontFamily: 'monospace' }}>
+							{mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
+							<button
+								onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(''); }}
+								style={{ color: '#60a5fa', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'monospace', fontSize: 11 }}
+							>
+								{mode === 'login' ? 'Sign up' : 'Sign in'}
+							</button>
+						</p>
+					</div>
+				</div>
 			</div>
-		</div>
+		</>
 	);
 }
 
-function AuthField({ label, value, onChange, type = 'text' }) {
+function AuthField({ label, value, onChange, type = 'text', placeholder = '', autoFocus = false, rightAction }) {
 	return (
-		<div className="flex flex-col gap-1.5">
-			<Label className="text-[10px] font-mono tracking-widest uppercase text-zinc-500">
-				{label}
-			</Label>
-			<Input
+		<div className="flex flex-col gap-2">
+			<div className="flex items-center justify-between">
+				<label style={{
+					fontSize: 10, fontFamily: 'monospace', letterSpacing: '0.1em',
+					textTransform: 'uppercase', color: 'rgba(113,113,122,0.9)', fontWeight: 600,
+				}}>
+					{label}
+				</label>
+				{rightAction}
+			</div>
+			<input
+				className="auth-input"
 				type={type}
 				value={value}
 				onChange={(e) => onChange(e.target.value)}
-				className="bg-zinc-900 border-zinc-800 text-zinc-200 font-mono text-[12px] h-9 focus-visible:ring-blue-500/50 focus-visible:border-blue-500/50"
+				placeholder={placeholder}
+				autoFocus={autoFocus}
+				style={{
+					width: '100%', height: 44, padding: '0 16px',
+					background: 'rgba(255,255,255,0.04)',
+					border: '1px solid rgba(255,255,255,0.08)',
+					borderRadius: 10, outline: 'none',
+					color: '#e4e4e7', fontFamily: 'JetBrains Mono, monospace', fontSize: 13,
+					transition: 'border-color 0.2s, box-shadow 0.2s',
+					boxSizing: 'border-box',
+				}}
+				onFocus={(e) => {
+					e.target.style.borderColor = 'rgba(96,165,250,0.5)';
+					e.target.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.12)';
+				}}
+				onBlur={(e) => {
+					e.target.style.borderColor = 'rgba(255,255,255,0.08)';
+					e.target.style.boxShadow = 'none';
+				}}
 			/>
 		</div>
 	);
