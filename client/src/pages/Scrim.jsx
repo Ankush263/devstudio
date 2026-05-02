@@ -34,8 +34,9 @@ import {
 	ChevronRight,
 	Atom,
 	Terminal,
+	PanelLeft,
 } from 'lucide-react';
-import { FileTabBar } from './scrim/FileTabBar';
+import { FileExplorer } from './scrim/FileExplorer';
 import { FloatingPanel } from './scrim/FloatingPanel';
 import { ScrimSidebar } from './scrim/ScrimSidebar';
 
@@ -130,7 +131,7 @@ function AuthModal({ onAuth }) {
 				.auth-mode-btn { transition: all 0.2s cubic-bezier(0.22,1,0.36,1); }
 				.auth-error { animation: auth-slide-up 0.2s ease forwards; }
 			`}</style>
-			<div className="auth-backdrop fixed inset-0 z-[99999] flex items-center justify-center"
+			<div className="auth-backdrop fixed inset-0 z-99999 flex items-center justify-center"
 				style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(12px)' }}>
 				<div
 					className="auth-card relative w-full max-w-sm mx-4 rounded-2xl flex flex-col overflow-hidden"
@@ -771,6 +772,9 @@ export default function Scrim() {
 	const [consoleLogs, setConsoleLogs] = useState([]);
 	const [consoleHeight, setConsoleHeight] = useState(0);
 
+	// ── file explorer ──
+	const [showExplorer, setShowExplorer] = useState(true);
+
 	// refs
 	const isRecordingRef = useRef(false);
 	const isPlayingRef = useRef(false);
@@ -1333,6 +1337,19 @@ export default function Scrim() {
 						<div className="flex-1 flex flex-col overflow-hidden">
 							{/* ── Toolbar ────────────────────────────── */}
 							<div className="h-10.5 bg-[#252526] flex items-center px-2.5 gap-1.5 border-b border-[#1e1e1e] shrink-0">
+								<button
+									onClick={() => setShowExplorer((v) => !v)}
+									title="Toggle file explorer"
+									className={cn(
+										'flex items-center justify-center w-7 h-7 rounded border transition-all',
+										showExplorer
+											? 'border-blue-500/60 text-blue-400 bg-blue-500/10'
+											: 'border-zinc-700 text-zinc-500 hover:text-zinc-300 hover:border-zinc-500',
+									)}
+								>
+									<PanelLeft className="w-3.5 h-3.5" />
+								</button>
+								<div className="w-px h-4 bg-zinc-700" />
 								<ToolbarBtn
 									variant="rec"
 									active={isRecording}
@@ -1411,64 +1428,69 @@ export default function Scrim() {
 								)}
 							</div>
 
-							{/* ── File Tabs ──────────────────────────── */}
-							<FileTabBar
-								files={files}
-								activeFile={activeFile}
-								onSelect={(f) => {
-									setActiveFile(f);
-									if (f.name.endsWith('.jsx')) setReactMode(true);
-								}}
-								onAdd={addFile}
-								onDelete={deleteFile}
-								disabled={isPlaying}
-							/>
-
-							{/* ── Monaco Editor ─────────────────────── */}
-							<div className="flex-1 min-h-0 relative overflow-hidden">
-								{files.map((f) => (
-									<div
-										key={f.id}
-										className="absolute inset-0"
-										style={{
-											visibility:
-												f.id === activeFile?.id ? 'visible' : 'hidden',
+							{/* ── Explorer + Editor row ─────────────── */}
+							<div className="flex-1 flex overflow-hidden min-h-0">
+								{/* File Explorer sidebar */}
+								{showExplorer && (
+									<FileExplorer
+										files={files}
+										activeFile={activeFile}
+										onSelect={(f) => {
+											setActiveFile(f);
+											if (f.name.endsWith('.jsx')) setReactMode(true);
 										}}
-									>
-										<Editor
-											path={f.id}
-											onMount={
-												f.id === activeFile?.id ? handleEditorMount : undefined
-											}
-											height="100%"
-											language={f.language || fileLanguage(f.name)}
-											value={f.content}
-											theme="vs-dark"
-											onChange={(val) => {
-												if (!isPlayingRef.current)
-													updateFileContent(f.id, val || '');
+										onAdd={addFile}
+										onDelete={deleteFile}
+										disabled={isPlaying}
+									/>
+								)}
+
+								{/* ── Monaco Editor ─────────────────────── */}
+								<div className="flex-1 min-w-0 min-h-0 relative overflow-hidden">
+									{files.map((f) => (
+										<div
+											key={f.id}
+											className="absolute inset-0"
+											style={{
+												visibility:
+													f.id === activeFile?.id ? 'visible' : 'hidden',
 											}}
-											options={{
-												readOnly: isPlaying,
-												minimap: { enabled: false },
-												fontSize: 14,
-												fontFamily:
-													"'JetBrains Mono','Fira Code','Cascadia Code',monospace",
-												fontLigatures: true,
-												lineHeight: 22,
-												padding: { top: 10, bottom: 10 },
-												scrollBeyondLastLine: false,
-												smoothScrolling: true,
-												cursorBlinking: 'smooth',
-												cursorSmoothCaretAnimation: 'on',
-												renderLineHighlight: 'gutter',
-												bracketPairColorization: { enabled: true },
-												guides: { bracketPairs: true },
-												wordWrap: 'on',
-											}}
-										/>
-									</div>
-								))}
+										>
+											<Editor
+												path={f.id}
+												onMount={
+													f.id === activeFile?.id ? handleEditorMount : undefined
+												}
+												height="100%"
+												language={f.language || fileLanguage(f.name)}
+												value={f.content}
+												theme="vs-dark"
+												onChange={(val) => {
+													if (!isPlayingRef.current)
+														updateFileContent(f.id, val || '');
+												}}
+												options={{
+													readOnly: isPlaying,
+													minimap: { enabled: false },
+													fontSize: 14,
+													fontFamily:
+														"'JetBrains Mono','Fira Code','Cascadia Code',monospace",
+													fontLigatures: true,
+													lineHeight: 22,
+													padding: { top: 10, bottom: 10 },
+													scrollBeyondLastLine: false,
+													smoothScrolling: true,
+													cursorBlinking: 'smooth',
+													cursorSmoothCaretAnimation: 'on',
+													renderLineHighlight: 'gutter',
+													bracketPairColorization: { enabled: true },
+													guides: { bracketPairs: true },
+													wordWrap: 'on',
+												}}
+											/>
+										</div>
+									))}
+								</div>
 							</div>
 
 							{/* ── Console Panel ─────────────────────── */}
