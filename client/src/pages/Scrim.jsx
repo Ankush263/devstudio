@@ -33,6 +33,7 @@ import {
 	Hexagon,
 	ChevronRight,
 	Atom,
+	Terminal,
 } from 'lucide-react';
 import { FileTabBar } from './scrim/FileTabBar';
 import { FloatingPanel } from './scrim/FloatingPanel';
@@ -319,6 +320,17 @@ function AuthField({ label, value, onChange, type = 'text', placeholder = '', au
 // ─────────────────────────────────────────────
 //  PREVIEW PANEL
 // ─────────────────────────────────────────────
+const CONSOLE_INTERCEPT = `<script>
+window.parent.postMessage({type:'console_clear'},'*');
+(function(){
+  var _l=console.log,_e=console.error,_w=console.warn;
+  function _pm(level,args){window.parent.postMessage({type:'console',level:level,args:args.map(function(x){return typeof x==='object'?JSON.stringify(x):String(x);})},'*');}
+  console.log=function(){_l.apply(console,arguments);_pm('log',Array.prototype.slice.call(arguments));};
+  console.error=function(){_e.apply(console,arguments);_pm('error',Array.prototype.slice.call(arguments));};
+  console.warn=function(){_w.apply(console,arguments);_pm('warn',Array.prototype.slice.call(arguments));};
+})();
+</script>`;
+
 function buildSrcDoc(files, reactMode) {
 	const get = (ext) =>
 		files.find((f) => f.name.endsWith(`.${ext}`))?.content || '';
@@ -330,6 +342,7 @@ function buildSrcDoc(files, reactMode) {
 <html>
 <head>
   <meta charset="utf-8">
+  ${CONSOLE_INTERCEPT}
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -343,6 +356,7 @@ function buildSrcDoc(files, reactMode) {
     const el = typeof App !== 'undefined' ? React.createElement(App) : React.createElement('div', null, 'Export a default <App /> component');
     ReactDOM.createRoot(document.getElementById('root')).render(el);
   } catch(e) {
+    console.error(String(e));
     document.getElementById('root').innerHTML = '<pre style="color:#f44747;padding:12px">'+e+'</pre>';
   }
   </script>
@@ -358,23 +372,13 @@ function buildSrcDoc(files, reactMode) {
 <html>
 <head>
 <meta charset="utf-8">
+${CONSOLE_INTERCEPT}
 ${css ? `<style>${css}</style>` : ''}
 <style>body{background:#1e1e1e;color:#d4d4d4;font-family:'JetBrains Mono','Courier New',monospace;font-size:13px;padding:12px;margin:0;line-height:1.6;}</style>
 </head>
 <body>
 ${html}
-${
-	js
-		? `<script>
-const _log=console.log,_err=console.error,_warn=console.warn;
-function _out(msg,color){const el=document.createElement('div');el.style.cssText='color:'+color+';margin:2px 0;';el.innerText=msg;document.body.appendChild(el);}
-console.log=function(...a){_log(...a);_out(a.join(' '),'#d4d4d4');};
-console.error=function(...a){_err(...a);_out('✕ '+a.join(' '),'#f44747');};
-console.warn=function(...a){_warn(...a);_out('⚠ '+a.join(' '),'#dcdcaa');};
-try{${js}}catch(e){_out('✕ '+e,'#f44747');}
-</script>`
-		: ''
-}
+${js ? `<script>try{${js}}catch(e){console.error(String(e));}</script>` : ''}
 </body>
 </html>`;
 }
@@ -550,7 +554,7 @@ function ToolbarBtn({
 	return (
 		<button
 			className={cn(
-				'inline-flex items-center gap-1.5 px-3 h-7.5 bg-transparent border rounded',
+				'inline-flex justify-center items-center w-18 gap-1.5 px-3 h-7.5 bg-transparent border rounded',
 				'font-mono text-[11px] font-medium tracking-wide whitespace-nowrap',
 				'transition-all duration-150 cursor-pointer',
 				'disabled:opacity-30 disabled:cursor-not-allowed',
@@ -598,6 +602,128 @@ const LANG_MAP = {
 	md: 'markdown',
 };
 
+// ─────────────────────────────────────────────
+//  CONSOLE PANEL
+// ─────────────────────────────────────────────
+function ConsolePanel({ logs, height, onHeightChange, onClear }) {
+	const logsRef = useRef(null);
+	const isOpen = height > 0;
+	const hasErrors = logs.some((l) => l.level === 'error');
+
+	useEffect(() => {
+		if (logsRef.current && isOpen)
+			logsRef.current.scrollTop = logsRef.current.scrollHeight;
+	}, [logs, isOpen]);
+
+	const onDragStart = (e) => {
+		e.preventDefault();
+		const startY = e.clientY;
+		const startH = height;
+		const onMove = (ev) => {
+			const delta = startY - ev.clientY;
+			const newH = Math.max(0, Math.min(Math.floor(window.innerHeight * 0.6), startH + delta));
+			onHeightChange(newH < 24 ? 0 : newH);
+		};
+		const onUp = () => {
+			document.removeEventListener('mousemove', onMove);
+			document.removeEventListener('mouseup', onUp);
+		};
+		document.addEventListener('mousemove', onMove);
+		document.addEventListener('mouseup', onUp);
+	};
+
+	const HEADER_H = 30;
+
+	return (
+		<div
+			className="shrink-0 flex flex-col bg-[#1a1a1a]"
+			style={{
+				height: HEADER_H + (isOpen ? height : 0),
+				borderTop: '1px solid rgba(63,63,70,0.5)',
+			}}
+		>
+			{/* Header / drag handle */}
+			<div
+				onMouseDown={onDragStart}
+				className="flex items-center justify-between px-3 select-none cursor-ns-resize hover:bg-zinc-800/30 transition-colors shrink-0"
+				style={{ height: HEADER_H, minHeight: HEADER_H }}
+			>
+				<div className="flex items-center gap-2">
+					<Terminal
+						className={cn('w-3 h-3', hasErrors ? 'text-red-400' : 'text-zinc-500')}
+					/>
+					<span
+						className={cn(
+							'font-mono text-[10px] font-semibold tracking-wider uppercase',
+							hasErrors ? 'text-red-400' : 'text-zinc-500',
+						)}
+					>
+						Console
+					</span>
+					{logs.length > 0 && (
+						<span
+							className={cn(
+								'px-1 rounded text-[9px] font-mono',
+								hasErrors ? 'bg-red-900/50 text-red-300' : 'bg-zinc-700/80 text-zinc-400',
+							)}
+						>
+							{logs.length}
+						</span>
+					)}
+				</div>
+				<div className="flex items-center gap-2">
+					{logs.length > 0 && (
+						<button
+							onMouseDown={(e) => e.stopPropagation()}
+							onClick={(e) => { e.stopPropagation(); onClear(); }}
+							className="font-mono text-[9px] tracking-wider uppercase text-zinc-600 hover:text-zinc-300 transition-colors"
+						>
+							clear
+						</button>
+					)}
+					<button
+						onMouseDown={(e) => e.stopPropagation()}
+						onClick={(e) => { e.stopPropagation(); onHeightChange(isOpen ? 0 : 180); }}
+						className="text-zinc-600 hover:text-zinc-300 transition-colors text-[11px] leading-none px-0.5"
+					>
+						{isOpen ? '↓' : '↑'}
+					</button>
+				</div>
+			</div>
+
+			{/* Log entries */}
+			{isOpen && (
+				<div
+					ref={logsRef}
+					className="flex-1 overflow-y-auto px-3 py-1.5 font-mono text-[11px] leading-relaxed"
+					style={{ scrollbarWidth: 'thin', scrollbarColor: '#3f3f3f transparent' }}
+				>
+					{logs.length === 0 ? (
+						<span className="text-zinc-700 italic text-[10px]">No console output</span>
+					) : (
+						logs.map((log, i) => (
+							<div
+								key={i}
+								className={cn(
+									'flex gap-2 py-0.5 border-b border-zinc-800/40 last:border-0',
+									log.level === 'error' && 'text-[#f87171]',
+									log.level === 'warn' && 'text-[#fbbf24]',
+									log.level === 'log' && 'text-[#d4d4d4]',
+								)}
+							>
+								<span className="text-zinc-600 shrink-0 select-none w-3">
+									{log.level === 'error' ? '✕' : log.level === 'warn' ? '⚠' : '>'}
+								</span>
+								<span className="break-all">{log.args?.join(' ')}</span>
+							</div>
+						))
+					)}
+				</div>
+			)}
+		</div>
+	);
+}
+
 // ─────────────────────────────────────────────────────────────────────
 //  MAIN APP
 // ─────────────────────────────────────────────────────────────────────
@@ -641,6 +767,10 @@ export default function Scrim() {
 	const [forkLoading, setForkLoading] = useState(false);
 	const [pausedEditing, setPausedEditing] = useState(false);
 
+	// ── console ──
+	const [consoleLogs, setConsoleLogs] = useState([]);
+	const [consoleHeight, setConsoleHeight] = useState(0);
+
 	// refs
 	const isRecordingRef = useRef(false);
 	const isPlayingRef = useRef(false);
@@ -679,6 +809,16 @@ export default function Scrim() {
 			.then((data) => setScrims(data?.scrims || []))
 			.catch(() => {});
 	}, [user]);
+
+	useEffect(() => {
+		const handler = (e) => {
+			if (!e.data || typeof e.data !== 'object') return;
+			if (e.data.type === 'console_clear') setConsoleLogs([]);
+			else if (e.data.type === 'console') setConsoleLogs((prev) => [...prev, e.data]);
+		};
+		window.addEventListener('message', handler);
+		return () => window.removeEventListener('message', handler);
+	}, []);
 
 	const fileLanguage = (name) => {
 		const ext = name?.split('.').pop()?.toLowerCase();
@@ -1285,7 +1425,7 @@ export default function Scrim() {
 							/>
 
 							{/* ── Monaco Editor ─────────────────────── */}
-							<div className="flex-1 relative overflow-hidden">
+							<div className="flex-1 min-h-0 relative overflow-hidden">
 								{files.map((f) => (
 									<div
 										key={f.id}
@@ -1331,19 +1471,24 @@ export default function Scrim() {
 								))}
 							</div>
 
+							{/* ── Console Panel ─────────────────────── */}
+							<ConsolePanel
+								logs={consoleLogs}
+								height={consoleHeight}
+								onHeightChange={setConsoleHeight}
+								onClear={() => setConsoleLogs([])}
+							/>
+
 							{/* ── Audio Bar ─────────────────────────── */}
-							{savedData ? (
-								<div className="flex items-center gap-2 px-2.5 h-9 bg-[#252526] border-t border-zinc-800">
-									<Volume2 className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
-									<audio
-										ref={audioRef}
-										controls
-										className="audio-scrubber flex-1"
-									/>
-								</div>
-							) : (
-								<audio ref={audioRef} className="hidden" />
-							)}
+							<div
+								className={cn(
+									'flex items-center gap-2 px-2.5 shrink-0 bg-[#252526] border-t border-zinc-800',
+									savedData ? 'h-9' : 'h-0 overflow-hidden border-0',
+								)}
+							>
+								<Volume2 className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+								<audio ref={audioRef} controls className="audio-scrubber flex-1" />
+							</div>
 
 							{/* ── Status Bar ────────────────────────── */}
 							<div
