@@ -781,6 +781,9 @@ export default function Scrim() {
 	// ── file explorer ──
 	const [showExplorer, setShowExplorer] = useState(true);
 
+	// ── playback cursor ──
+	const [playbackCursor, setPlaybackCursor] = useState(null);
+
 	// refs
 	const isRecordingRef = useRef(false);
 	const isPlayingRef = useRef(false);
@@ -797,6 +800,10 @@ export default function Scrim() {
 	const playbackIntervalRef = useRef(null);
 	const audioBlobURLRef = useRef(null);
 	const activeFileRef = useRef(activeFile);
+	const editorContainerRef = useRef(null);
+	const lastMouseMoveTimeRef = useRef(0);
+	const lastCursorTimeRef = useRef(0);
+	const playbackCursorDecorationRef = useRef(null);
 
 	useEffect(() => {
 		isRecordingRef.current = isRecording;
@@ -846,6 +853,22 @@ export default function Scrim() {
 		if (activeFileRef.current?.id === id) {
 			setActiveFile((prev) => (prev ? { ...prev, content } : prev));
 		}
+	}, []);
+
+	const handleEditorMouseMove = useCallback((e) => {
+		if (!isRecordingRef.current) return;
+		const now = Date.now();
+		if (now - lastMouseMoveTimeRef.current < 16) return;
+		lastMouseMoveTimeRef.current = now;
+		const container = editorContainerRef.current;
+		if (!container) return;
+		const rect = container.getBoundingClientRect();
+		oplogRef.current.push({
+			time: (Date.now() - startTimeRef.current) / 1000,
+			type: 'mousemove',
+			x: (e.clientX - rect.left) / rect.width,
+			y: (e.clientY - rect.top) / rect.height,
+		});
 	}, []);
 
 	// ── RECORDING ──
@@ -990,6 +1013,23 @@ export default function Scrim() {
 							}
 						}
 					}
+				} else if (op.type === 'mousemove') {
+					setPlaybackCursor({ x: op.x, y: op.y });
+				} else if (op.type === 'cursor') {
+					if (editorRef.current) {
+						if (playbackCursorDecorationRef.current) {
+							playbackCursorDecorationRef.current.clear();
+						}
+						playbackCursorDecorationRef.current =
+							editorRef.current.createDecorationsCollection([{
+								range: new window.monaco.Range(
+									op.position.lineNumber, op.position.column,
+									op.position.lineNumber, op.position.column,
+								),
+								options: { beforeContentClassName: 'monaco-playback-cursor' },
+							}]);
+						editorRef.current.revealPositionInCenterIfOutsideViewport(op.position);
+					}
 				}
 				lastAppliedIndexRef.current++;
 			}
@@ -1065,6 +1105,11 @@ export default function Scrim() {
 		}
 		setIsPlaying(false);
 		setPausedEditing(false);
+		setPlaybackCursor(null);
+		if (playbackCursorDecorationRef.current) {
+			playbackCursorDecorationRef.current.clear();
+			playbackCursorDecorationRef.current = null;
+		}
 		if (savedData) {
 			const snapshot = savedData.oplog?.[0];
 			if (snapshot?.files) {
@@ -1134,6 +1179,20 @@ export default function Scrim() {
 				fileId: currentFile.id,
 				changes,
 				snapshot: content,
+			});
+		});
+		editor.onDidChangeCursorPosition((e) => {
+			if (!isRecordingRef.current) return;
+			const now = Date.now();
+			if (now - lastCursorTimeRef.current < 30) return;
+			lastCursorTimeRef.current = now;
+			const currentFile = activeFileRef.current;
+			if (!currentFile) return;
+			oplogRef.current.push({
+				time: (Date.now() - startTimeRef.current) / 1000,
+				type: 'cursor',
+				fileId: currentFile.id,
+				position: { lineNumber: e.position.lineNumber, column: e.position.column },
 			});
 		});
 	};
@@ -1297,6 +1356,19 @@ export default function Scrim() {
           50%{box-shadow:0 0 0 4px rgba(52,211,153,.2)}
         }
         .audio-scrubber { height:26px; flex:1; filter:invert(1) hue-rotate(180deg); opacity:.6; }
+        .monaco-playback-cursor {
+          display: inline-block;
+          width: 0;
+          border-left: 2px solid rgba(212,212,212,0.9);
+          height: 1.05em;
+          vertical-align: text-bottom;
+          animation: playback-cursor-blink 1.1s step-end infinite;
+          pointer-events: none;
+        }
+        @keyframes playback-cursor-blink {
+          0%,100% { opacity:1; }
+          50% { opacity:0; }
+        }
       `}</style>
 
 			{!user && (
@@ -1515,7 +1587,25 @@ export default function Scrim() {
 								)}
 
 								{/* ── Monaco Editor ─────────────────────── */}
-								<div className="flex-1 min-w-0 min-h-0 relative overflow-hidden">
+								<div
+									ref={editorContainerRef}
+									className="flex-1 min-w-0 min-h-0 relative overflow-hidden"
+									onMouseMove={handleEditorMouseMove}
+								>
+									{isPlaying && playbackCursor && (
+										<div
+											className="absolute pointer-events-none z-50"
+											style={{
+												left: `${playbackCursor.x * 100}%`,
+												top: `${playbackCursor.y * 100}%`,
+												transition: 'left 0.05s linear, top 0.05s linear',
+											}}
+										>
+											<svg width="16" height="20" viewBox="0 0 16 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+												<path d="M1 1L1 15L5 11L8 18L10 17L7 10L12 10Z" fill="white" stroke="#1e1e1e" strokeWidth="1.5" strokeLinejoin="round"/>
+											</svg>
+										</div>
+									)}
 									{files.map((f) => (
 										<div
 											key={f.id}
