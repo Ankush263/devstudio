@@ -148,3 +148,23 @@ func (s *ScrimService) AttachScrim(
 
 	return "success", nil
 }
+
+func (s *ScrimService) GetScrimByID(ctx context.Context, scrimID string) (*sqlc.Scrim, error) {
+	id, err := uuid.Parse(scrimID)
+	if err != nil {
+		return nil, err
+	}
+	scrim, err := s.q.GetScrimByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return &scrim, nil
+}
+
+func (s *ScrimService) GetScrimsByUser(ctx context.Context, userID string) ([]sqlc.Scrim, error) {
+	uid, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, err
+	}
+	return s.q.GetScrimByUser(ctx, uid)
+}

@@ -87,3 +87,22 @@ func (h *ScrimHandler) AttachScrim(c *gin.Context) {
 
 	response.OK(c, "updated")
 }
+
+func (h *ScrimHandler) GetScrimByID(c *gin.Context) {
+	scrim, err := h.scrimService.GetScrimByID(c, c.Param("scrimid"))
+	if err != nil {
+		response.Error(c, 404, "scrim not found")
+		return
+	}
+	response.OK(c, dto.ToScrimResponse(scrim))
+}
+
+func (h *ScrimHandler) GetScrimsByUser(c *gin.Context) {
+	userID := c.GetString("userID")
+	scrims, err := h.scrimService.GetScrimsByUser(c, userID)
+	if err != nil {
+		response.Error(c, 500, "failed to get scrims")
+		return
+	}
+	response.OK(c, gin.H{"scrims": dto.ToManyScrimResponse(scrims)})
+}

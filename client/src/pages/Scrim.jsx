@@ -35,6 +35,7 @@ import {
 	Atom,
 	Terminal,
 	PanelLeft,
+	Save,
 } from 'lucide-react';
 import { FileExplorer } from './scrim/FileExplorer';
 import { FloatingPanel } from './scrim/FloatingPanel';
@@ -55,8 +56,12 @@ function api(path, opts = {}) {
 			...opts.headers,
 		},
 	}).then(async (r) => {
+		if (r.status === 401) {
+			localStorage.removeItem('jwt');
+			window.dispatchEvent(new Event('auth:expired'));
+		}
 		if (!r.ok) throw new Error(await r.text());
-		return r.json().catch(() => null);
+		return r.json().then((json) => json?.data ?? json).catch(() => null);
 	});
 }
 
@@ -550,6 +555,7 @@ function ToolbarBtn({
 		pause: 'border-yellow-600/70 text-yellow-400 hover:bg-yellow-950/20',
 		restart: 'border-purple-600/70 text-purple-400 hover:bg-purple-950/20',
 		fork: 'border-emerald-600 text-emerald-400 hover:bg-emerald-950/20 animate-[fork-pulse_2s_ease_infinite]',
+		save: 'border-blue-600 text-blue-400 hover:bg-blue-950/20 hover:text-blue-300',
 	};
 
 	return (
@@ -803,6 +809,12 @@ export default function Scrim() {
 	}, [activeFile]);
 
 	useEffect(() => {
+		const handler = () => setUser(null);
+		window.addEventListener('auth:expired', handler);
+		return () => window.removeEventListener('auth:expired', handler);
+	}, []);
+
+	useEffect(() => {
 		if (editorRef.current)
 			editorRef.current.updateOptions({ readOnly: isPlaying });
 	}, [isPlaying]);
@@ -880,31 +892,53 @@ export default function Scrim() {
 				duration: (Date.now() - startTimeRef.current) / 1000,
 			};
 			setSavedData(data);
-			if (activeScrim) {
-				setPendingSaveData(data);
-				setShowSaveModal(true);
-			}
+			setPendingSaveData(data);
 		};
 		setIsRecording(false);
 	};
 
 	const handleSaveScrim = async ({ title, description }) => {
-		if (!activeScrim || !pendingSaveData) return;
+		if (!pendingSaveData) return;
 		setSaveLoading(true);
 		try {
-			await api(`/scrims/${activeScrim.id}`, {
+			// Encode the audio blob as a base64 data URL so it persists in the DB
+			const audioDataUrl = await new Promise((resolve, reject) => {
+				const reader = new FileReader();
+				reader.onloadend = () => resolve(reader.result);
+				reader.onerror = reject;
+				reader.readAsDataURL(pendingSaveData.audioBlob);
+			});
+
+			let targetId = activeScrim?.id;
+
+			if (!targetId) {
+				const newScrim = await api('/scrims', {
+					method: 'POST',
+					body: JSON.stringify({ title: title.trim(), description: description.trim() }),
+				});
+				targetId = newScrim.id;
+				setActiveScrim(newScrim);
+				setScrims((prev) => [newScrim, ...prev]);
+			}
+
+			await api(`/scrims/${targetId}`, {
 				method: 'PATCH',
 				body: JSON.stringify({
 					title: title.trim(),
 					description: description.trim(),
 					duration: Math.ceil(pendingSaveData.duration),
-					videodescription: { oplog: pendingSaveData.oplog },
+					videodescription: {
+						oplog: pendingSaveData.oplog,
+						audio: audioDataUrl,
+						duration: pendingSaveData.duration,
+					},
 				}),
 			});
-			setActiveScrim((prev) => ({ ...prev, title: title.trim() }));
+
+			setActiveScrim((prev) => prev ? { ...prev, title: title.trim() } : prev);
 			setScrims((prev) =>
 				prev.map((s) =>
-					s.id === activeScrim.id ? { ...s, title: title.trim() } : s,
+					s.id === targetId ? { ...s, title: title.trim() } : s,
 				),
 			);
 			setShowSaveModal(false);
@@ -1166,18 +1200,40 @@ export default function Scrim() {
 		setIsPlaying(false);
 		setPausedEditing(false);
 		try {
-			const data = await api(`/scrims/${s.id}`);
-			const apiFiles = data?.files || [];
+			const [scrimData, filesData] = await Promise.all([
+				api(`/scrims/${s.id}`),
+				api(`/scrimfiles/${s.id}`).catch(() => []),
+			]);
+
+			// Load editor files (scrimfiles uses `filename` not `name`)
+			const apiFiles = Array.isArray(filesData) ? filesData : [];
 			if (apiFiles.length > 0) {
 				const mapped = apiFiles.map((f) => ({
-					...f,
-					language: fileLanguage(f.name),
+					id: f.id,
+					name: f.filename,
+					language: f.language || fileLanguage(f.filename),
+					content: f.content,
 				}));
 				setFiles(mapped);
 				setActiveFile(mapped[0]);
 			} else {
 				setFiles(DEFAULT_FILES);
 				setActiveFile(DEFAULT_FILES[0]);
+			}
+
+			// Reconstruct savedData so the recording can be played back
+			const vd = scrimData?.videodescription;
+			if (vd && vd.oplog && vd.audio) {
+				const mimeType = vd.audio.split(';')[0].split(':')[1] || 'audio/webm';
+				const base64 = vd.audio.split(',')[1];
+				const bytes = atob(base64);
+				const buf = new Uint8Array(bytes.length);
+				for (let i = 0; i < bytes.length; i++) buf[i] = bytes.charCodeAt(i);
+				setSavedData({
+					audioBlob: new Blob([buf], { type: mimeType }),
+					oplog: vd.oplog,
+					duration: vd.duration ?? scrimData.duration ?? 0,
+				});
 			}
 		} catch {
 			setFiles(DEFAULT_FILES);
@@ -1249,9 +1305,9 @@ export default function Scrim() {
 				/>
 			)}
 
-			{showSaveModal && activeScrim && (
+			{showSaveModal && (
 				<SaveModal
-					defaultTitle={activeScrim.title}
+					defaultTitle={activeScrim?.title || ''}
 					onSave={handleSaveScrim}
 					onCancel={() => {
 						setShowSaveModal(false);
@@ -1368,6 +1424,19 @@ export default function Scrim() {
 									<Square className="w-2 h-2 fill-current" />
 									Stop
 								</ToolbarBtn>
+
+								{savedData && !isRecording && (
+									<ToolbarBtn
+										variant="save"
+										onClick={() => {
+											setPendingSaveData(savedData);
+											setShowSaveModal(true);
+										}}
+									>
+										<Save className="w-2.5 h-2.5" />
+										Save Scrim
+									</ToolbarBtn>
+								)}
 
 								<div className="w-px h-4 bg-zinc-700 mx-1" />
 

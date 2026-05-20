@@ -19,6 +19,14 @@ type scrimResponse struct {
 	UpdatedAt        string      `json:"updated_at"`
 }
 
+func ToManyScrimResponse(scrims []sqlc.Scrim) []scrimResponse {
+	res := make([]scrimResponse, 0, len(scrims))
+	for i := range scrims {
+		res = append(res, ToScrimResponse(&scrims[i]))
+	}
+	return res
+}
+
 func ToScrimResponse(s *sqlc.Scrim) scrimResponse {
 	var videoDesc interface{} = map[string]interface{}{}
 
