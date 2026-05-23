@@ -34,6 +34,12 @@ func main() {
 	scrimFilesService := services.NewScrimFilesService(database)
 	scrimFilesHandler := handlers.NewScrimFilesHandler(scrimFilesService)
 
+	s3Service, err := services.NewS3Service(cfg.AWSAccessKey, cfg.AWSSecretKey, cfg.AWSRegion, cfg.S3Bucket)
+	if err != nil {
+		log.Fatal("Failed to initialize S3 service:", err)
+	}
+	uploadHandler := handlers.NewUploadHandler(s3Service)
+
 	r := gin.Default()
 
 	r.Use(cors.New(cors.Config{
@@ -48,7 +54,7 @@ func main() {
 	r.Use(gin.Recovery())
 	r.Use(middleware.ErrorHandler())
 
-	routes.SetupRoutes(r, authHandler, cfg.JWTSecret, scrimHandler, scrimFilesHandler)
+	routes.SetupRoutes(r, authHandler, cfg.JWTSecret, scrimHandler, scrimFilesHandler, uploadHandler)
 
 	log.Println("Server running on port", cfg.Port)
 	r.Run(":" + cfg.Port)

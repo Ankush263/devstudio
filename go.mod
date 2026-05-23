@@ -7,6 +7,11 @@ require github.com/lib/pq v1.12.0
 require github.com/gin-contrib/cors v1.7.6
 
 require (
+	github.com/aws/aws-sdk-go v1.55.8 // indirect
+	github.com/jmespath/go-jmespath v0.4.0 // indirect
+)
+
+require (
 	github.com/bytedance/gopkg v0.1.4 // indirect
 	github.com/bytedance/sonic v1.15.0 // indirect
 	github.com/bytedance/sonic/loader v0.5.0 // indirect

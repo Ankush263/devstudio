@@ -65,6 +65,19 @@ function api(path, opts = {}) {
 	});
 }
 
+// Multipart upload — does not set Content-Type so the browser adds the boundary.
+function apiUpload(path, formData) {
+	const token = localStorage.getItem('jwt');
+	return fetch(`${API_BASE}${path}`, {
+		method: 'POST',
+		headers: token ? { Authorization: `Bearer ${token}` } : {},
+		body: formData,
+	}).then(async (r) => {
+		if (!r.ok) throw new Error(await r.text());
+		return r.json().then((json) => json?.data ?? json).catch(() => null);
+	});
+}
+
 // ─────────────────────────────────────────────
 //  AUTH MODAL
 // ─────────────────────────────────────────────
@@ -924,14 +937,6 @@ export default function Scrim() {
 		if (!pendingSaveData) return;
 		setSaveLoading(true);
 		try {
-			// Encode the audio blob as a base64 data URL so it persists in the DB
-			const audioDataUrl = await new Promise((resolve, reject) => {
-				const reader = new FileReader();
-				reader.onloadend = () => resolve(reader.result);
-				reader.onerror = reject;
-				reader.readAsDataURL(pendingSaveData.audioBlob);
-			});
-
 			let targetId = activeScrim?.id;
 
 			if (!targetId) {
@@ -944,17 +949,28 @@ export default function Scrim() {
 				setScrims((prev) => [newScrim, ...prev]);
 			}
 
+			// Upload audio blob to S3
+			const videoForm = new FormData();
+			videoForm.append('file', pendingSaveData.audioBlob, 'recording.webm');
+			const { url: videoUrl } = await apiUpload('/upload?type=video', videoForm);
+
+			// Upload oplog JSON to S3
+			const oplogBlob = new Blob(
+				[JSON.stringify(pendingSaveData.oplog)],
+				{ type: 'application/json' },
+			);
+			const oplogForm = new FormData();
+			oplogForm.append('file', oplogBlob, 'oplog.json');
+			const { url: oplogUrl } = await apiUpload('/upload?type=oplog', oplogForm);
+
 			await api(`/scrims/${targetId}`, {
 				method: 'PATCH',
 				body: JSON.stringify({
 					title: title.trim(),
 					description: description.trim(),
 					duration: Math.ceil(pendingSaveData.duration),
-					videodescription: {
-						oplog: pendingSaveData.oplog,
-						audio: audioDataUrl,
-						duration: pendingSaveData.duration,
-					},
+					videourl: videoUrl,
+					oplogurl: oplogUrl,
 				}),
 			});
 
@@ -1281,18 +1297,33 @@ export default function Scrim() {
 			}
 
 			// Reconstruct savedData so the recording can be played back
-			const vd = scrimData?.videodescription;
-			if (vd && vd.oplog && vd.audio) {
-				const mimeType = vd.audio.split(';')[0].split(':')[1] || 'audio/webm';
-				const base64 = vd.audio.split(',')[1];
-				const bytes = atob(base64);
-				const buf = new Uint8Array(bytes.length);
-				for (let i = 0; i < bytes.length; i++) buf[i] = bytes.charCodeAt(i);
+			if (scrimData?.videourl && scrimData?.oplogurl) {
+				const [audioRes, oplogRes] = await Promise.all([
+					fetch(scrimData.videourl),
+					fetch(scrimData.oplogurl),
+				]);
+				const audioBlob = await audioRes.blob();
+				const oplog = await oplogRes.json();
 				setSavedData({
-					audioBlob: new Blob([buf], { type: mimeType }),
-					oplog: vd.oplog,
-					duration: vd.duration ?? scrimData.duration ?? 0,
+					audioBlob,
+					oplog,
+					duration: scrimData.duration ?? 0,
 				});
+			} else {
+				// Fallback: legacy base64 storage
+				const vd = scrimData?.videodescription;
+				if (vd && vd.oplog && vd.audio) {
+					const mimeType = vd.audio.split(';')[0].split(':')[1] || 'audio/webm';
+					const base64 = vd.audio.split(',')[1];
+					const bytes = atob(base64);
+					const buf = new Uint8Array(bytes.length);
+					for (let i = 0; i < bytes.length; i++) buf[i] = bytes.charCodeAt(i);
+					setSavedData({
+						audioBlob: new Blob([buf], { type: mimeType }),
+						oplog: vd.oplog,
+						duration: vd.duration ?? scrimData.duration ?? 0,
+					});
+				}
 			}
 		} catch {
 			setFiles(DEFAULT_FILES);

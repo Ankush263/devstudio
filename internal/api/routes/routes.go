@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func SetupRoutes(r *gin.Engine, authHandler *handlers.AuthHandler, secret string, scrimHandler *handlers.ScrimHandler, scrimFilesHandler *handlers.ScrimFilesHandler) {
+func SetupRoutes(r *gin.Engine, authHandler *handlers.AuthHandler, secret string, scrimHandler *handlers.ScrimHandler, scrimFilesHandler *handlers.ScrimFilesHandler, uploadHandler *handlers.UploadHandler) {
 	api := r.Group("/api")
 
 	auth := api.Group("/auth")
@@ -39,5 +39,11 @@ func SetupRoutes(r *gin.Engine, authHandler *handlers.AuthHandler, secret string
 	{
 		scrimfiles.POST("", scrimFilesHandler.CreateScrimFiles)
 		scrimfiles.GET("/:scrimid", scrimFilesHandler.GetScrimFilesByScrimID)
+	}
+
+	upload := api.Group("/upload")
+	upload.Use(middleware.AuthMiddleware(secret))
+	{
+		upload.POST("", uploadHandler.Upload)
 	}
 }
