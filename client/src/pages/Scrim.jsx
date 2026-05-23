@@ -776,6 +776,8 @@ export default function Scrim() {
 	const [isPlaying, setIsPlaying] = useState(false);
 	const [savedData, setSavedData] = useState(null);
 	const [recordingStartTime, setRecordingStartTime] = useState(0);
+	const [audioCurrentTime, setAudioCurrentTime] = useState(0);
+	const [audioDuration, setAudioDuration] = useState(0);
 
 	// ── save modal ──
 	const [showSaveModal, setShowSaveModal] = useState(false);
@@ -1089,12 +1091,14 @@ export default function Scrim() {
 
 		const onCanPlay = () => {
 			audioRef.current.removeEventListener('canplay', onCanPlay);
+			if (isFinite(audioRef.current.duration)) setAudioDuration(audioRef.current.duration);
 			audioRef.current.currentTime = resumeTime;
 			audioRef.current.play().catch(() => setIsPlaying(false));
 		};
 		audioRef.current.addEventListener('canplay', onCanPlay);
 		if (audioRef.current.readyState >= 3) {
 			audioRef.current.removeEventListener('canplay', onCanPlay);
+			if (isFinite(audioRef.current.duration)) setAudioDuration(audioRef.current.duration);
 			audioRef.current.currentTime = resumeTime;
 			audioRef.current.play().catch(() => setIsPlaying(false));
 		}
@@ -1119,6 +1123,7 @@ export default function Scrim() {
 			audioRef.current.pause();
 			audioRef.current.currentTime = 0;
 		}
+		setAudioCurrentTime(0);
 		setIsPlaying(false);
 		setPausedEditing(false);
 		setPlaybackCursor(null);
@@ -1143,8 +1148,10 @@ export default function Scrim() {
 	useEffect(() => {
 		if (isPlaying && savedData) {
 			playbackIntervalRef.current = setInterval(() => {
-				if (audioRef.current && !audioRef.current.paused)
+				if (audioRef.current && !audioRef.current.paused) {
+					setAudioCurrentTime(audioRef.current.currentTime);
 					applyOplog(audioRef.current.currentTime);
+				}
 			}, 50);
 		}
 		return () => {
@@ -1171,6 +1178,62 @@ export default function Scrim() {
 			if (audioBlobURLRef.current) URL.revokeObjectURL(audioBlobURLRef.current);
 		};
 	}, []);
+
+	// Keep audioDuration in sync once the audio element has loaded metadata.
+	useEffect(() => {
+		const audio = audioRef.current;
+		if (!audio) return;
+		const onDuration = () => { if (isFinite(audio.duration)) setAudioDuration(audio.duration); };
+		audio.addEventListener('loadedmetadata', onDuration);
+		audio.addEventListener('durationchange', onDuration);
+		return () => {
+			audio.removeEventListener('loadedmetadata', onDuration);
+			audio.removeEventListener('durationchange', onDuration);
+		};
+	}, []);
+
+	// Rebuild the full editor state at targetTime by replaying the oplog from scratch.
+	const replayOplogToTime = useCallback((targetTime) => {
+		if (!savedData) return;
+		const snapshot = savedData.oplog[0];
+		if (!snapshot?.files) return;
+
+		const fileContents = {};
+		for (const f of snapshot.files) fileContents[f.id] = f.content;
+
+		let idx = 1;
+		while (idx < savedData.oplog.length && savedData.oplog[idx].time <= targetTime) {
+			const op = savedData.oplog[idx];
+			if (op.type === 'edit') fileContents[op.fileId] = op.snapshot;
+			idx++;
+		}
+
+		const newFiles = snapshot.files.map((f) => ({
+			...f,
+			language: fileLanguage(f.name),
+			content: fileContents[f.id] ?? f.content,
+		}));
+		setFiles(newFiles);
+		setActiveFile({ ...newFiles[0] });
+
+		if (editorRef.current) {
+			const model = editorRef.current.getModel();
+			if (model) {
+				const activeId = activeFileRef.current?.id ?? newFiles[0]?.id;
+				const content = fileContents[activeId];
+				if (content !== undefined) model.setValue(content);
+			}
+		}
+
+		lastAppliedIndexRef.current = idx;
+	}, [savedData]);
+
+	const handleScrub = useCallback((e) => {
+		const t = parseFloat(e.target.value);
+		setAudioCurrentTime(t);
+		if (audioRef.current) audioRef.current.currentTime = t;
+		replayOplogToTime(t);
+	}, [replayOplogToTime]);
 
 	// ── EDITOR ──
 	const handleEditorMount = (editor) => {
@@ -1386,7 +1449,6 @@ export default function Scrim() {
           0%,100%{box-shadow:0 0 0 0 rgba(52,211,153,0)}
           50%{box-shadow:0 0 0 4px rgba(52,211,153,.2)}
         }
-        .audio-scrubber { height:26px; flex:1; filter:invert(1) hue-rotate(180deg); opacity:.6; }
         .monaco-playback-cursor {
           display: inline-block;
           width: 0;
@@ -1698,8 +1760,24 @@ export default function Scrim() {
 									savedData ? 'h-9' : 'h-0 overflow-hidden border-0',
 								)}
 							>
+								<audio ref={audioRef} />
 								<Volume2 className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
-								<audio ref={audioRef} controls className="audio-scrubber flex-1" />
+								<span className="text-zinc-400 text-[10px] tabular-nums w-8 text-right">
+									{(() => { const s = audioCurrentTime; return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`; })()}
+								</span>
+								<input
+									type="range"
+									min={0}
+									max={audioDuration || savedData?.duration || 1}
+									step={0.05}
+									value={audioCurrentTime}
+									onChange={handleScrub}
+									className="flex-1 cursor-pointer accent-blue-400"
+									style={{ height: '4px' }}
+								/>
+								<span className="text-zinc-600 text-[10px] tabular-nums w-8">
+									{(() => { const s = audioDuration || savedData?.duration || 0; return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`; })()}
+								</span>
 							</div>
 
 							{/* ── Status Bar ────────────────────────── */}
