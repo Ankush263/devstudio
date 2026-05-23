@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -50,4 +51,23 @@ func (s *S3Service) Upload(r io.ReadSeeker, fileType, ext, contentType string) (
 
 	url := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", s.bucket, s.region, key)
 	return url, nil
+}
+
+// GetObject fetches the raw bytes of an S3 object by key.
+func (s *S3Service) GetObject(key string) ([]byte, error) {
+	result, err := s.client.GetObject(&s3.GetObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer result.Body.Close()
+	return io.ReadAll(result.Body)
+}
+
+// KeyFromURL extracts the S3 object key from a full bucket URL.
+func (s *S3Service) KeyFromURL(rawURL string) string {
+	prefix := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/", s.bucket, s.region)
+	return strings.TrimPrefix(rawURL, prefix)
 }

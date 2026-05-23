@@ -28,17 +28,17 @@ func main() {
 	authService := services.NewAuthService(database, cfg.JWTSecret)
 	authHandler := handlers.NewAuthHandler(authService)
 
-	scrimService := services.NewScrimService(database)
-	scrimHandler := handlers.NewScrimHandler(scrimService)
-
-	scrimFilesService := services.NewScrimFilesService(database)
-	scrimFilesHandler := handlers.NewScrimFilesHandler(scrimFilesService)
-
 	s3Service, err := services.NewS3Service(cfg.AWSAccessKey, cfg.AWSSecretKey, cfg.AWSRegion, cfg.S3Bucket)
 	if err != nil {
 		log.Fatal("Failed to initialize S3 service:", err)
 	}
 	uploadHandler := handlers.NewUploadHandler(s3Service)
+
+	scrimService := services.NewScrimService(database)
+	scrimHandler := handlers.NewScrimHandler(scrimService, s3Service)
+
+	scrimFilesService := services.NewScrimFilesService(database)
+	scrimFilesHandler := handlers.NewScrimFilesHandler(scrimFilesService)
 
 	r := gin.Default()
 

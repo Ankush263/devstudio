@@ -1,10 +1,13 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"math"
+	"strings"
 
 	"github.com/Ankush263/devstudio/internal/api/dto"
 	"github.com/Ankush263/devstudio/internal/db/sqlc"
@@ -167,4 +170,92 @@ func (s *ScrimService) GetScrimsByUser(ctx context.Context, userID string) ([]sq
 		return nil, err
 	}
 	return s.q.GetScrimByUser(ctx, uid)
+}
+
+type FileSnapshot struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Content string `json:"content"`
+}
+
+func (s *ScrimService) ForkScrim(
+	ctx context.Context,
+	userID, scrimID, title string,
+	forkTime float64,
+	forkOplogIndex int,
+	snapshots []FileSnapshot,
+	s3svc *S3Service,
+) (*sqlc.Scrim, error) {
+	origID, err := uuid.Parse(scrimID)
+	if err != nil {
+		return nil, err
+	}
+	orig, err := s.q.GetScrimByID(ctx, origID)
+	if err != nil {
+		return nil, err
+	}
+
+	uid, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Fetch, truncate, and re-upload the oplog.
+	var newOplogURL string
+	if orig.OplogUrl.Valid && orig.OplogUrl.String != "" && s3svc != nil {
+		key := s3svc.KeyFromURL(orig.OplogUrl.String)
+		data, fetchErr := s3svc.GetObject(key)
+		if fetchErr == nil {
+			var oplog []json.RawMessage
+			if json.Unmarshal(data, &oplog) == nil {
+				if forkOplogIndex < len(oplog) {
+					oplog = oplog[:forkOplogIndex]
+				}
+				if truncated, merr := json.Marshal(oplog); merr == nil {
+					newOplogURL, _ = s3svc.Upload(bytes.NewReader(truncated), "oplog", ".json", "application/json")
+				}
+			}
+		}
+	}
+
+	duration := int32(math.Ceil(forkTime))
+	newScrim, err := s.q.CreateScrim(ctx, sqlc.CreateScrimParams{
+		UserID:           uid,
+		Title:            title,
+		Description:      dto.ToNullString(""),
+		VideoUrl:         orig.VideoUrl,
+		OplogUrl:         dto.ToNullString(newOplogURL),
+		Duration:         dto.ToInt32(duration),
+		Videodescription: pqtype.NullRawMessage{},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	for _, snap := range snapshots {
+		_, _ = s.q.CreateScrimFiles(ctx, sqlc.CreateScrimFilesParams{
+			ScrimID:  newScrim.ID,
+			Filename: snap.Name,
+			Language: langFromName(snap.Name),
+			Location: "",
+			Content:  snap.Content,
+		})
+	}
+
+	return &newScrim, nil
+}
+
+func langFromName(name string) string {
+	switch {
+	case strings.HasSuffix(name, ".html"):
+		return "html"
+	case strings.HasSuffix(name, ".css"):
+		return "css"
+	case strings.HasSuffix(name, ".js"), strings.HasSuffix(name, ".jsx"):
+		return "javascript"
+	case strings.HasSuffix(name, ".ts"), strings.HasSuffix(name, ".tsx"):
+		return "typescript"
+	default:
+		return "plaintext"
+	}
 }

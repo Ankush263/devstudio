@@ -32,6 +32,7 @@ func SetupRoutes(r *gin.Engine, authHandler *handlers.AuthHandler, secret string
 		scrim.GET("/:scrimid", scrimHandler.GetScrimByID)
 		scrim.POST("", scrimHandler.CreateScrim)
 		scrim.PATCH("/:scrimid", scrimHandler.AttachScrim)
+		scrim.POST("/:scrimid/fork", scrimHandler.ForkScrim)
 	}
 
 	scrimfiles := api.Group("/scrimfiles")

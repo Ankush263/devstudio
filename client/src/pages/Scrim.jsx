@@ -28,6 +28,7 @@ import {
 	GitFork,
 	Plus,
 	X,
+	Check,
 	Menu,
 	Volume2,
 	Hexagon,
@@ -589,6 +590,61 @@ function ToolbarBtn({
 }
 
 // ─────────────────────────────────────────────
+//  FORK MARKER
+// ─────────────────────────────────────────────
+function ForkMarker({ position, onSave, onDismiss }) {
+	const [hovered, setHovered] = useState(false);
+	const leaveTimer = useRef(null);
+
+	const enter = () => { clearTimeout(leaveTimer.current); setHovered(true); };
+	const leave = () => { leaveTimer.current = setTimeout(() => setHovered(false), 120); };
+
+	return (
+		<div
+			className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-20 flex flex-col items-center"
+			style={{ left: `${position}%` }}
+			onPointerDown={(e) => e.stopPropagation()}
+			onMouseEnter={enter}
+			onMouseLeave={leave}
+		>
+			{/* Diamond marker */}
+			<div className="w-3 h-3 bg-amber-400 rotate-45 cursor-pointer shadow-sm shadow-amber-900/50" />
+
+			{/* Action tooltip — also wired to enter/leave so the gap doesn't dismiss it */}
+			{hovered && (
+				<div
+					className="absolute bottom-5 flex items-center gap-0.5 bg-zinc-900 border border-zinc-700 rounded px-1.5 py-1 shadow-lg whitespace-nowrap"
+					onMouseEnter={enter}
+					onMouseLeave={leave}
+				>
+					<button
+						onClick={(e) => { e.stopPropagation(); onSave(); }}
+						title="Save fork"
+						className="flex items-center justify-center w-5 h-5 rounded hover:bg-emerald-950/60 text-emerald-400 hover:text-emerald-300 transition-colors"
+					>
+						<Check className="w-3.5 h-3.5" />
+					</button>
+					<div className="w-px h-3 bg-zinc-700" />
+					<button
+						onClick={(e) => { e.stopPropagation(); onDismiss(); }}
+						title="Dismiss"
+						className="flex items-center justify-center w-5 h-5 rounded hover:bg-red-950/60 text-red-400 hover:text-red-300 transition-colors"
+					>
+						<X className="w-3.5 h-3.5" />
+					</button>
+				</div>
+			)}
+		</div>
+	);
+}
+
+// ─────────────────────────────────────────────
+//  HELPERS
+// ─────────────────────────────────────────────
+const fmtTime = (s) =>
+	`${Math.floor((s || 0) / 60)}:${String(Math.floor((s || 0) % 60)).padStart(2, '0')}`;
+
+// ─────────────────────────────────────────────
 //  DEFAULTS
 // ─────────────────────────────────────────────
 const DEFAULT_FILES = [
@@ -819,6 +875,7 @@ export default function Scrim() {
 	const lastMouseMoveTimeRef = useRef(0);
 	const lastCursorTimeRef = useRef(0);
 	const playbackCursorDecorationRef = useRef(null);
+	const isProgrammaticEditRef = useRef(false);
 
 	useEffect(() => {
 		isRecordingRef.current = isRecording;
@@ -1016,6 +1073,7 @@ export default function Scrim() {
 					if (editorRef.current && activeFileRef.current?.id === op.fileId) {
 						const model = editorRef.current.getModel();
 						if (model) {
+							isProgrammaticEditRef.current = true;
 							for (const change of op.changes) {
 								model.applyEdits([
 									{
@@ -1029,6 +1087,7 @@ export default function Scrim() {
 									},
 								]);
 							}
+							isProgrammaticEditRef.current = false;
 						}
 					}
 				} else if (op.type === 'mousemove') {
@@ -1111,7 +1170,6 @@ export default function Scrim() {
 		pausedSnapshotRef.current = JSON.stringify(files);
 		audioRef.current.pause();
 		setIsPlaying(false);
-		setPausedEditing(true);
 	};
 
 	const restart = () => {
@@ -1221,19 +1279,42 @@ export default function Scrim() {
 			if (model) {
 				const activeId = activeFileRef.current?.id ?? newFiles[0]?.id;
 				const content = fileContents[activeId];
-				if (content !== undefined) model.setValue(content);
+				if (content !== undefined) {
+					isProgrammaticEditRef.current = true;
+					model.setValue(content);
+					isProgrammaticEditRef.current = false;
+				}
 			}
 		}
 
 		lastAppliedIndexRef.current = idx;
 	}, [savedData]);
 
-	const handleScrub = useCallback((e) => {
-		const t = parseFloat(e.target.value);
-		setAudioCurrentTime(t);
-		if (audioRef.current) audioRef.current.currentTime = t;
-		replayOplogToTime(t);
-	}, [replayOplogToTime]);
+	const seekTo = useCallback((t) => {
+		const total = audioDuration || savedData?.duration || 0;
+		const clamped = Math.max(0, Math.min(t, total));
+		setAudioCurrentTime(clamped);
+		if (audioRef.current) audioRef.current.currentTime = clamped;
+		replayOplogToTime(clamped);
+	}, [audioDuration, savedData, replayOplogToTime]);
+
+	const handleBarPointerDown = useCallback((e) => {
+		e.preventDefault();
+		const rect = e.currentTarget.getBoundingClientRect();
+		const total = audioDuration || savedData?.duration || 1;
+		const seek = (clientX) => {
+			const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+			seekTo(pct * total);
+		};
+		seek(e.clientX);
+		const onMove = (me) => seek(me.clientX);
+		const onUp = () => {
+			window.removeEventListener('pointermove', onMove);
+			window.removeEventListener('pointerup', onUp);
+		};
+		window.addEventListener('pointermove', onMove);
+		window.addEventListener('pointerup', onUp);
+	}, [audioDuration, savedData, seekTo]);
 
 	// ── EDITOR ──
 	const handleEditorMount = (editor) => {
@@ -1580,7 +1661,6 @@ export default function Scrim() {
 									<Circle className="w-2 h-2 fill-current" />
 									{isRecording ? 'Rec' : 'Record'}
 								</ToolbarBtn>
-
 								<ToolbarBtn
 									variant="stop"
 									onClick={stopRecording}
@@ -1589,7 +1669,6 @@ export default function Scrim() {
 									<Square className="w-2 h-2 fill-current" />
 									Stop
 								</ToolbarBtn>
-
 								{savedData && !isRecording && (
 									<ToolbarBtn
 										variant="save"
@@ -1602,48 +1681,7 @@ export default function Scrim() {
 										Save Scrim
 									</ToolbarBtn>
 								)}
-
-								<div className="w-px h-4 bg-zinc-700 mx-1" />
-
-								<ToolbarBtn
-									variant="play"
-									onClick={play}
-									disabled={!savedData || isPlaying || isRecording}
-								>
-									<Play className="w-2.5 h-2.5 fill-current" />
-									{pausedTimeRef.current > 0 && !isPlaying ? 'Resume' : 'Play'}
-								</ToolbarBtn>
-
-								<ToolbarBtn
-									variant="pause"
-									onClick={pause}
-									disabled={!isPlaying}
-								>
-									<Pause className="w-2.5 h-2.5 fill-current" />
-									Pause
-								</ToolbarBtn>
-
-								<ToolbarBtn
-									variant="restart"
-									onClick={restart}
-									disabled={!savedData || isRecording}
-								>
-									<RotateCcw className="w-2.5 h-2.5" />
-									Restart
-								</ToolbarBtn>
-
-								{pausedEditing && (
-									<ToolbarBtn
-										variant="fork"
-										onClick={() => setShowForkModal(true)}
-									>
-										<GitFork className="w-2.5 h-2.5" />
-										Save Fork
-									</ToolbarBtn>
-								)}
-
 								<div className="flex-1" />
-
 								{isRecording && (
 									<div className="flex items-center gap-2 text-red-400 text-[11px]">
 										<span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
@@ -1653,7 +1691,6 @@ export default function Scrim() {
 										/>
 									</div>
 								)}
-
 								{savedData && !isRecording && (
 									<span className="text-zinc-600 text-[10px]">
 										{savedData.oplog.length} ops ·{' '}
@@ -1718,8 +1755,16 @@ export default function Scrim() {
 												value={f.content}
 												theme="vs-dark"
 												onChange={(val) => {
-													if (!isPlayingRef.current)
+													if (!isPlayingRef.current) {
 														updateFileContent(f.id, val || '');
+														if (
+															!isRecordingRef.current &&
+															!isProgrammaticEditRef.current &&
+															savedData
+														) {
+															setPausedEditing(true);
+														}
+													}
 												}}
 												options={{
 													readOnly: isPlaying,
@@ -1753,31 +1798,77 @@ export default function Scrim() {
 								onClear={() => setConsoleLogs([])}
 							/>
 
-							{/* ── Audio Bar ─────────────────────────── */}
+							{/* ── Playback Bar ──────────────────────── */}
 							<div
 								className={cn(
-									'flex items-center gap-2 px-2.5 shrink-0 bg-[#252526] border-t border-zinc-800',
-									savedData ? 'h-9' : 'h-0 overflow-hidden border-0',
+									'flex items-center gap-2 px-2.5 shrink-0 bg-[#1e1e1e] border-t border-zinc-800',
+									savedData ? 'h-10' : 'h-0 overflow-hidden border-0',
 								)}
 							>
 								<audio ref={audioRef} />
-								<Volume2 className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
-								<span className="text-zinc-400 text-[10px] tabular-nums w-8 text-right">
-									{(() => { const s = audioCurrentTime; return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`; })()}
+
+								{/* Play / Pause */}
+								<button
+									onClick={isPlaying ? pause : play}
+									disabled={!savedData || isRecording}
+									className="flex items-center justify-center w-7 h-7 rounded text-zinc-300 hover:text-white hover:bg-zinc-700 disabled:opacity-30 transition-colors shrink-0"
+								>
+									{isPlaying
+										? <Pause className="w-3.5 h-3.5 fill-current" />
+										: <Play className="w-3.5 h-3.5 fill-current" />}
+								</button>
+
+								{/* Restart */}
+								<button
+									onClick={restart}
+									disabled={!savedData || isRecording}
+									className="flex items-center justify-center w-6 h-6 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700 disabled:opacity-30 transition-colors shrink-0"
+								>
+									<RotateCcw className="w-3 h-3" />
+								</button>
+
+								{/* Current time */}
+								<span className="text-zinc-400 text-[10px] tabular-nums w-9 text-right shrink-0">
+									{fmtTime(audioCurrentTime)}
 								</span>
-								<input
-									type="range"
-									min={0}
-									max={audioDuration || savedData?.duration || 1}
-									step={0.05}
-									value={audioCurrentTime}
-									onChange={handleScrub}
-									className="flex-1 cursor-pointer accent-blue-400"
-									style={{ height: '4px' }}
-								/>
-								<span className="text-zinc-600 text-[10px] tabular-nums w-8">
-									{(() => { const s = audioDuration || savedData?.duration || 0; return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`; })()}
+
+								{/* Custom progress track */}
+								<div
+									className="flex-1 relative h-5 flex items-center cursor-pointer select-none"
+									onPointerDown={handleBarPointerDown}
+								>
+									{/* Track */}
+									<div className="absolute inset-x-0 h-0.75 bg-zinc-700 rounded-full">
+										<div
+											className="h-full bg-blue-500 rounded-full"
+											style={{
+												width: `${(audioCurrentTime / (audioDuration || savedData?.duration || 1)) * 100}%`,
+											}}
+										/>
+									</div>
+									{/* Thumb */}
+									<div
+										className="absolute w-3 h-3 bg-blue-400 rounded-full -translate-x-1/2 shadow pointer-events-none"
+										style={{
+											left: `${(audioCurrentTime / (audioDuration || savedData?.duration || 1)) * 100}%`,
+										}}
+									/>
+									{/* Fork marker */}
+									{pausedEditing && savedData && (
+										<ForkMarker
+											position={(pausedTimeRef.current / (audioDuration || savedData.duration || 1)) * 100}
+											onSave={() => setShowForkModal(true)}
+											onDismiss={() => setPausedEditing(false)}
+										/>
+									)}
+								</div>
+
+								{/* Total duration */}
+								<span className="text-zinc-600 text-[10px] tabular-nums w-9 shrink-0">
+									{fmtTime(audioDuration || savedData?.duration || 0)}
 								</span>
+
+								<Volume2 className="w-3.5 h-3.5 text-zinc-600 shrink-0 ml-1" />
 							</div>
 
 							{/* ── Status Bar ────────────────────────── */}
