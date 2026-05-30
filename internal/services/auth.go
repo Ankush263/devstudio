@@ -9,6 +9,7 @@ import (
 
 	"github.com/Ankush263/devstudio/internal/db/sqlc"
 	"github.com/Ankush263/devstudio/internal/pkg/jwt"
+	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -44,6 +45,18 @@ func (s *AuthService) Register(ctx context.Context, username, email, password st
 	}
 
 	return &user, err
+}
+
+func (s *AuthService) GetUserByID(ctx context.Context, userID string) (*sqlc.User, error) {
+	uid, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, err
+	}
+	user, err := s.q.GetUserByid(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
 }
 
 func (s *AuthService) Login(ctx context.Context, email, password string) (string, error) {

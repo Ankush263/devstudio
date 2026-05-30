@@ -30,3 +30,9 @@ SELECT * FROM scrims WHERE published = true;
 
 -- name: GetScrimByUser :many
 SELECT * FROM scrims WHERE user_id = $1;
+
+-- name: GetForksByUser :many
+SELECT * FROM scrims WHERE user_id = $1 AND forked_from_id IS NOT NULL;
+
+-- name: SetForkedFrom :exec
+UPDATE scrims SET forked_from_id = $2 WHERE id = $1;

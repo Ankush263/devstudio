@@ -15,6 +15,7 @@ type scrimResponse struct {
 	OplogURL         string      `json:"oplogurl"`
 	Duration         int32       `json:"duration"`
 	Published        bool        `json:"published"`
+	ForkedFromID     string      `json:"forked_from_id,omitempty"`
 	CreatedAt        string      `json:"created_at"`
 	UpdatedAt        string      `json:"updated_at"`
 }
@@ -34,6 +35,11 @@ func ToScrimResponse(s *sqlc.Scrim) scrimResponse {
 		videoDesc = s.Videodescription.RawMessage
 	}
 
+	forkedFromID := ""
+	if s.ForkedFromID.Valid {
+		forkedFromID = s.ForkedFromID.UUID.String()
+	}
+
 	return scrimResponse{
 		ID:               s.ID,
 		UserID:           s.UserID.String(),
@@ -44,6 +50,7 @@ func ToScrimResponse(s *sqlc.Scrim) scrimResponse {
 		OplogURL:         String(s.OplogUrl),
 		Duration:         Int32(s.Duration),
 		Published:        Bool(s.Published),
+		ForkedFromID:     forkedFromID,
 		CreatedAt:        Time(s.CreatedAt),
 		UpdatedAt:        Time(s.UpdatedAt),
 	}

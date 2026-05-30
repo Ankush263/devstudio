@@ -27,94 +27,26 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
+// ─── API ──────────────────────────────────────────────────────────────────────
 
-const MOCK_SCRIMS = [
-	{
-		id: '1',
-		title: 'Building a REST API with Go',
-		description:
-			'Learn to build production-ready REST APIs using Go and the Gin framework with JWT auth.',
-		duration: 2732,
-		views: 1243,
-		stars: 89,
-		forks: 12,
-		tags: ['Go', 'REST', 'Backend'],
-		createdAt: '2 days ago',
-		published: true,
-		lang: 'go',
-	},
-	{
-		id: '2',
-		title: 'React Hooks Deep Dive',
-		description:
-			'Understanding useState, useEffect, useCallback, and building powerful custom hooks.',
-		duration: 2295,
-		views: 876,
-		stars: 64,
-		forks: 8,
-		tags: ['React', 'JavaScript'],
-		createdAt: '1 week ago',
-		published: true,
-		lang: 'jsx',
-	},
-	{
-		id: '3',
-		title: 'CSS Grid Mastery',
-		description:
-			'Complete guide to CSS Grid layout system with real-world practical examples.',
-		duration: 3128,
-		views: 532,
-		stars: 41,
-		forks: 5,
-		tags: ['CSS', 'Frontend'],
-		createdAt: '2 weeks ago',
-		published: false,
-		lang: 'css',
-	},
-	{
-		id: '4',
-		title: 'TypeScript for Beginners',
-		description:
-			'Getting started with TypeScript: types, interfaces, generics and advanced patterns.',
-		duration: 3764,
-		views: 2104,
-		stars: 178,
-		forks: 24,
-		tags: ['TypeScript', 'JavaScript'],
-		createdAt: '1 month ago',
-		published: true,
-		lang: 'ts',
-	},
-	{
-		id: '5',
-		title: 'Intro to PostgreSQL',
-		description:
-			'Learn SQL fundamentals and PostgreSQL-specific features from scratch.',
-		duration: 1790,
-		views: 789,
-		stars: 55,
-		forks: 9,
-		tags: ['SQL', 'PostgreSQL'],
-		createdAt: '3 weeks ago',
-		published: true,
-		lang: 'sql',
-	},
-	{
-		id: '6',
-		title: 'Next.js App Router',
-		description:
-			'Deep dive into Next.js 14 App Router, server components, and streaming data fetching.',
-		duration: 4522,
-		views: 3421,
-		stars: 256,
-		forks: 45,
-		tags: ['Next.js', 'React'],
-		createdAt: '3 days ago',
-		published: false,
-		lang: 'jsx',
-	},
-];
+const API_BASE = 'http://localhost:8000/api';
+
+function api(path, opts = {}) {
+	const token = localStorage.getItem('jwt');
+	return fetch(`${API_BASE}${path}`, {
+		...opts,
+		headers: {
+			'Content-Type': 'application/json',
+			...(token ? { Authorization: `Bearer ${token}` } : {}),
+			...opts.headers,
+		},
+	}).then(async (r) => {
+		if (!r.ok) throw new Error(await r.text());
+		return r.json().then((json) => json?.data ?? json).catch(() => null);
+	});
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const TAG_COLORS = {
 	Go: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/20',
@@ -140,12 +72,25 @@ const LANG_GRADIENT = {
 };
 
 function fmtDuration(secs) {
+	if (!secs) return '0:00';
 	const h = Math.floor(secs / 3600);
 	const m = Math.floor((secs % 3600) / 60);
 	const s = secs % 60;
 	if (h > 0)
 		return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 	return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function timeAgo(dateStr) {
+	if (!dateStr) return '';
+	const d = new Date(dateStr);
+	const now = new Date();
+	const diff = Math.floor((now - d) / 1000);
+	if (diff < 60) return 'just now';
+	if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+	if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+	if (diff < 2592000) return `${Math.floor(diff / 86400)}d ago`;
+	return `${Math.floor(diff / 2592000)}mo ago`;
 }
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
@@ -157,7 +102,11 @@ const NAV_ITEMS = [
 	{ id: 'forks', icon: GitFork, label: 'Forks' },
 ];
 
-function Sidebar({ view, setView, isLoggedIn, onLogout, open, setOpen }) {
+function Sidebar({ view, setView, isLoggedIn, onLogout, open, setOpen, user }) {
+	const initials = user?.username
+		? user.username.slice(0, 2).toUpperCase()
+		: 'A';
+
 	return (
 		<>
 			{open && (
@@ -195,7 +144,6 @@ function Sidebar({ view, setView, isLoggedIn, onLogout, open, setOpen }) {
 
 				{/* Nav */}
 				<nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
-					{/*  eslint-disable-next-line no-unused-vars */}
 					{NAV_ITEMS.map(({ id, icon: Icon, label }) => (
 						<button
 							key={id}
@@ -279,14 +227,14 @@ function Sidebar({ view, setView, isLoggedIn, onLogout, open, setOpen }) {
 				{isLoggedIn && (
 					<div className="px-4 py-3 border-t border-white/6 flex items-center gap-3 shrink-0">
 						<div className="w-7 h-7 rounded-full bg-linear-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white text-xs font-bold shrink-0">
-							A
+							{initials}
 						</div>
 						<div className="flex-1 min-w-0">
 							<p className="text-xs font-medium text-slate-200 truncate">
-								Ankush
+								{user?.username || 'You'}
 							</p>
 							<p className="text-[11px] text-slate-500 truncate">
-								ankush@devstudio.io
+								{user?.email || ''}
 							</p>
 						</div>
 					</div>
@@ -308,7 +256,11 @@ const VIEW_LABELS = {
 	settings: 'Settings',
 };
 
-function TopBar({ view, isLoggedIn, setOpen, navigate }) {
+function TopBar({ view, isLoggedIn, setOpen, navigate, user }) {
+	const initials = user?.username
+		? user.username.slice(0, 2).toUpperCase()
+		: 'A';
+
 	return (
 		<header className="flex items-center gap-4 px-5 h-14 border-b border-white/6 bg-[#0c0d11] shrink-0">
 			<button
@@ -341,7 +293,7 @@ function TopBar({ view, isLoggedIn, setOpen, navigate }) {
 				</button>
 				{isLoggedIn ? (
 					<div className="w-8 h-8 rounded-full bg-linear-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white text-xs font-bold cursor-pointer">
-						A
+						{initials}
 					</div>
 				) : (
 					<button
@@ -360,6 +312,7 @@ function TopBar({ view, isLoggedIn, setOpen, navigate }) {
 
 function ScrimCard({ scrim, navigate }) {
 	const [hovered, setHovered] = useState(false);
+	const lang = scrim.lang || 'js';
 
 	return (
 		<div
@@ -372,7 +325,7 @@ function ScrimCard({ scrim, navigate }) {
 			<div
 				className={cn(
 					'h-36 bg-linear-to-br flex items-center justify-center relative',
-					LANG_GRADIENT[scrim.lang] ?? 'from-slate-700 to-slate-800',
+					LANG_GRADIENT[lang] ?? 'from-slate-700 to-slate-800',
 				)}
 			>
 				<Code2 size={28} className="text-white/15" />
@@ -409,8 +362,16 @@ function ScrimCard({ scrim, navigate }) {
 							scrim.published ? 'bg-emerald-400' : 'bg-slate-500',
 						)}
 					/>
-					{scrim.published ? 'Published' : 'Draft'}
+					{scrim.published ? 'Public' : 'Private'}
 				</div>
+
+				{/* Fork badge */}
+				{scrim.forked_from_id && (
+					<div className="absolute top-2 right-8 flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border bg-amber-500/15 border-amber-500/25 text-amber-400 font-medium">
+						<GitFork size={9} />
+						Fork
+					</div>
+				)}
 
 				{/* Menu button */}
 				<button
@@ -430,42 +391,44 @@ function ScrimCard({ scrim, navigate }) {
 					{scrim.title}
 				</h3>
 				<p className="text-xs text-slate-500 mb-3 line-clamp-2 leading-relaxed">
-					{scrim.description}
+					{scrim.description || 'No description.'}
 				</p>
 
 				{/* Tags */}
-				<div className="flex gap-1.5 flex-wrap mb-3">
-					{scrim.tags.slice(0, 2).map((tag) => (
-						<span
-							key={tag}
-							className={cn(
-								'text-[10px] px-1.5 py-0.5 rounded border font-medium',
-								TAG_COLORS[tag] ??
-									'bg-slate-700/50 text-slate-400 border-slate-600/30',
-							)}
-						>
-							{tag}
-						</span>
-					))}
-				</div>
+				{scrim.tags && scrim.tags.length > 0 && (
+					<div className="flex gap-1.5 flex-wrap mb-3">
+						{scrim.tags.slice(0, 2).map((tag) => (
+							<span
+								key={tag}
+								className={cn(
+									'text-[10px] px-1.5 py-0.5 rounded border font-medium',
+									TAG_COLORS[tag] ??
+										'bg-slate-700/50 text-slate-400 border-slate-600/30',
+								)}
+							>
+								{tag}
+							</span>
+						))}
+					</div>
+				)}
 
 				{/* Stats */}
 				<div className="flex items-center justify-between text-slate-600 text-xs">
 					<div className="flex items-center gap-3">
 						<span className="flex items-center gap-1">
 							<Eye size={11} />
-							{scrim.views.toLocaleString()}
+							{scrim.views ?? 0}
 						</span>
 						<span className="flex items-center gap-1">
 							<Star size={11} />
-							{scrim.stars}
+							{scrim.stars ?? 0}
 						</span>
 						<span className="flex items-center gap-1">
 							<GitFork size={11} />
-							{scrim.forks}
+							{scrim.forks ?? 0}
 						</span>
 					</div>
-					<span className="text-slate-600">{scrim.createdAt}</span>
+					<span className="text-slate-600">{timeAgo(scrim.created_at)}</span>
 				</div>
 			</div>
 		</div>
@@ -474,7 +437,6 @@ function ScrimCard({ scrim, navigate }) {
 
 // ─── StatCard ─────────────────────────────────────────────────────────────────
 
-// eslint-disable-next-line no-unused-vars
 function StatCard({ label, value, icon: Icon, subtext, gradient }) {
 	return (
 		<div className="bg-[#13141a] border border-white/6 rounded-xl p-5 flex items-center gap-4">
@@ -497,39 +459,72 @@ function StatCard({ label, value, icon: Icon, subtext, gradient }) {
 	);
 }
 
+// ─── Empty State ──────────────────────────────────────────────────────────────
+
+function EmptyState({ icon: Icon, message, sub }) {
+	return (
+		<div className="text-center py-20">
+			<Icon size={32} className="text-slate-700 mx-auto mb-3" />
+			<p className="text-slate-500 text-sm mb-1">{message}</p>
+			{sub && <p className="text-slate-600 text-xs">{sub}</p>}
+		</div>
+	);
+}
+
 // ─── Dashboard View ───────────────────────────────────────────────────────────
 
-function DashboardView({ navigate, setView }) {
+function DashboardView({ navigate, setView, isLoggedIn, user }) {
+	const [publicScrims, setPublicScrims] = useState([]);
+	const [myScrims, setMyScrims] = useState([]);
+	const [loading, setLoading] = useState(true);
+
+	useEffect(() => {
+		const fetches = [api('/scrims/public').then((d) => setPublicScrims(d?.scrims ?? [])).catch(() => {})];
+		if (isLoggedIn) {
+			fetches.push(
+				api('/scrims')
+					.then((d) => setMyScrims(d?.scrims ?? []))
+					.catch(() => {}),
+			);
+		}
+		Promise.all(fetches).finally(() => setLoading(false));
+	}, [isLoggedIn]);
+
+	const totalDuration = myScrims.reduce((acc, s) => acc + (s.duration || 0), 0);
+	const published = myScrims.filter((s) => s.published).length;
+
 	const stats = [
 		{
-			label: 'Total Scrims',
-			value: '6',
-			subtext: '+2 this month',
+			label: 'My Scrims',
+			value: String(myScrims.length),
+			subtext: `${published} public`,
 			icon: Video,
 			gradient: 'bg-gradient-to-br from-blue-600 to-blue-700',
 		},
 		{
-			label: 'Total Views',
-			value: '9,964',
-			subtext: '+324 this week',
-			icon: Eye,
+			label: 'Public Scrims',
+			value: String(publicScrims.length),
+			subtext: 'community library',
+			icon: Globe,
 			gradient: 'bg-gradient-to-br from-blue-600 to-cyan-700',
 		},
 		{
-			label: 'Total Forks',
-			value: '103',
-			subtext: 'across all scrims',
-			icon: GitFork,
-			gradient: 'bg-gradient-to-br from-emerald-600 to-teal-700',
-		},
-		{
-			label: 'Watch Time',
-			value: '4.8h',
-			subtext: 'total recording',
+			label: 'Recording Time',
+			value: fmtDuration(totalDuration),
+			subtext: 'total recorded',
 			icon: Clock,
 			gradient: 'bg-gradient-to-br from-orange-600 to-amber-700',
 		},
+		{
+			label: 'Forks',
+			value: String(myScrims.filter((s) => s.forked_from_id).length),
+			subtext: 'scrims you forked',
+			icon: GitFork,
+			gradient: 'bg-gradient-to-br from-emerald-600 to-teal-700',
+		},
 	];
+
+	const displayScrims = publicScrims.slice(0, 6);
 
 	return (
 		<div className="p-6 space-y-8 max-w-7xl mx-auto w-full">
@@ -541,7 +536,7 @@ function DashboardView({ navigate, setView }) {
 						Welcome back
 					</p>
 					<h2 className="text-xl font-bold text-white mb-2">
-						Good to see you, Ankush!
+						{user?.username ? `Good to see you, ${user.username}!` : 'Welcome to DevStudio!'}
 					</h2>
 					<p className="text-sm text-slate-400 mb-5 max-w-md">
 						Record your coding sessions, share with the community, and let
@@ -567,35 +562,43 @@ function DashboardView({ navigate, setView }) {
 			</div>
 
 			{/* Stats */}
-			<div>
-				<p className="text-[11px] font-medium text-slate-600 uppercase tracking-widest mb-3">
-					Overview
-				</p>
-				<div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-					{stats.map((s) => (
-						<StatCard key={s.label} {...s} />
-					))}
+			{isLoggedIn && (
+				<div>
+					<p className="text-[11px] font-medium text-slate-600 uppercase tracking-widest mb-3">
+						Overview
+					</p>
+					<div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+						{stats.map((s) => (
+							<StatCard key={s.label} {...s} />
+						))}
+					</div>
 				</div>
-			</div>
+			)}
 
-			{/* Recent scrims */}
+			{/* Public scrims */}
 			<div>
 				<div className="flex items-center justify-between mb-4">
 					<p className="text-[11px] font-medium text-slate-600 uppercase tracking-widest">
-						Recent Scrims
+						Community Scrims
 					</p>
 					<button
-						onClick={() => setView('scrims')}
+						onClick={() => setView('browse')}
 						className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
 					>
 						View all <ChevronRight size={12} />
 					</button>
 				</div>
-				<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-					{MOCK_SCRIMS.slice(0, 6).map((s) => (
-						<ScrimCard key={s.id} scrim={s} navigate={navigate} />
-					))}
-				</div>
+				{loading ? (
+					<div className="text-center py-12 text-slate-600 text-sm">Loading…</div>
+				) : displayScrims.length > 0 ? (
+					<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+						{displayScrims.map((s) => (
+							<ScrimCard key={s.id} scrim={s} navigate={navigate} />
+						))}
+					</div>
+				) : (
+					<EmptyState icon={Globe} message="No public scrims yet." sub="Be the first to publish one!" />
+				)}
 			</div>
 		</div>
 	);
@@ -604,13 +607,23 @@ function DashboardView({ navigate, setView }) {
 // ─── My Scrims View ───────────────────────────────────────────────────────────
 
 function MyScrimsView({ navigate }) {
+	const [scrims, setScrims] = useState([]);
+	const [loading, setLoading] = useState(true);
 	const [filter, setFilter] = useState('all');
-	const filters = ['all', 'published', 'draft'];
+	const filters = ['all', 'public', 'private'];
+
+	useEffect(() => {
+		api('/scrims')
+			.then((d) => setScrims(d?.scrims ?? []))
+			.catch(() => {})
+			.finally(() => setLoading(false));
+	}, []);
+
 	const filtered =
 		filter === 'all'
-			? MOCK_SCRIMS
-			: MOCK_SCRIMS.filter((s) =>
-					filter === 'published' ? s.published : !s.published,
+			? scrims
+			: scrims.filter((s) =>
+					filter === 'public' ? s.published : !s.published,
 				);
 
 	return (
@@ -641,17 +654,16 @@ function MyScrimsView({ navigate }) {
 				</button>
 			</div>
 
-			{filtered.length > 0 ? (
+			{loading ? (
+				<div className="text-center py-12 text-slate-600 text-sm">Loading…</div>
+			) : filtered.length > 0 ? (
 				<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
 					{filtered.map((s) => (
 						<ScrimCard key={s.id} scrim={s} navigate={navigate} />
 					))}
 				</div>
 			) : (
-				<div className="text-center py-20">
-					<Video size={32} className="text-slate-700 mx-auto mb-3" />
-					<p className="text-slate-500 text-sm">No scrims here yet.</p>
-				</div>
+				<EmptyState icon={Video} message="No scrims here yet." sub="Record your first scrim!" />
 			)}
 		</div>
 	);
@@ -660,21 +672,35 @@ function MyScrimsView({ navigate }) {
 // ─── Browse View ──────────────────────────────────────────────────────────────
 
 function BrowseView({ navigate }) {
-	const trending = [...MOCK_SCRIMS].sort((a, b) => b.views - a.views);
+	const [scrims, setScrims] = useState([]);
+	const [loading, setLoading] = useState(true);
+
+	useEffect(() => {
+		api('/scrims/public')
+			.then((d) => setScrims(d?.scrims ?? []))
+			.catch(() => {})
+			.finally(() => setLoading(false));
+	}, []);
 
 	return (
 		<div className="p-6 space-y-5 max-w-7xl mx-auto w-full">
 			<div className="flex items-center gap-2">
 				<TrendingUp size={14} className="text-blue-400" />
 				<p className="text-[11px] font-medium text-slate-600 uppercase tracking-widest">
-					Trending
+					All Public Scrims
 				</p>
 			</div>
-			<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-				{trending.map((s) => (
-					<ScrimCard key={s.id} scrim={s} navigate={navigate} />
-				))}
-			</div>
+			{loading ? (
+				<div className="text-center py-12 text-slate-600 text-sm">Loading…</div>
+			) : scrims.length > 0 ? (
+				<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+					{scrims.map((s) => (
+						<ScrimCard key={s.id} scrim={s} navigate={navigate} />
+					))}
+				</div>
+			) : (
+				<EmptyState icon={Globe} message="No public scrims yet." sub="Be the first to publish one!" />
+			)}
 		</div>
 	);
 }
@@ -682,27 +708,35 @@ function BrowseView({ navigate }) {
 // ─── Forks View ───────────────────────────────────────────────────────────────
 
 function ForksView({ navigate }) {
-	const forked = MOCK_SCRIMS.filter((s) => s.forks > 15);
+	const [scrims, setScrims] = useState([]);
+	const [loading, setLoading] = useState(true);
+
+	useEffect(() => {
+		api('/scrims/myforks')
+			.then((d) => setScrims(d?.scrims ?? []))
+			.catch(() => {})
+			.finally(() => setLoading(false));
+	}, []);
 
 	return (
 		<div className="p-6 space-y-5 max-w-7xl mx-auto w-full">
 			<p className="text-sm text-slate-500">
 				Scrims you have forked from the community.
 			</p>
-			{forked.length === 0 ? (
-				<div className="text-center py-20">
-					<GitFork size={32} className="text-slate-700 mx-auto mb-3" />
-					<p className="text-slate-500 text-sm mb-1">No forks yet.</p>
-					<p className="text-slate-600 text-xs">
-						Browse scrims and fork one to start your own version.
-					</p>
-				</div>
-			) : (
+			{loading ? (
+				<div className="text-center py-12 text-slate-600 text-sm">Loading…</div>
+			) : scrims.length > 0 ? (
 				<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-					{forked.map((s) => (
+					{scrims.map((s) => (
 						<ScrimCard key={s.id} scrim={s} navigate={navigate} />
 					))}
 				</div>
+			) : (
+				<EmptyState
+					icon={GitFork}
+					message="No forks yet."
+					sub="Browse scrims and fork one to start your own version."
+				/>
 			)}
 		</div>
 	);
@@ -821,7 +855,18 @@ function CreateScrimView({ navigate }) {
 
 // ─── Profile View ─────────────────────────────────────────────────────────────
 
-function ProfileView({ isLoggedIn }) {
+function ProfileView({ isLoggedIn, user }) {
+	const [scrims, setScrims] = useState([]);
+	const [loading, setLoading] = useState(true);
+
+	useEffect(() => {
+		if (!isLoggedIn) { setLoading(false); return; }
+		api('/scrims')
+			.then((d) => setScrims(d?.scrims ?? []))
+			.catch(() => {})
+			.finally(() => setLoading(false));
+	}, [isLoggedIn]);
+
 	if (!isLoggedIn) {
 		return (
 			<div className="p-6 flex justify-center">
@@ -838,6 +883,13 @@ function ProfileView({ isLoggedIn }) {
 		);
 	}
 
+	const totalDuration = scrims.reduce((acc, s) => acc + (s.duration || 0), 0);
+	const publishedCount = scrims.filter((s) => s.published).length;
+	const forksCount = scrims.filter((s) => s.forked_from_id).length;
+	const initials = user?.username
+		? user.username.slice(0, 2).toUpperCase()
+		: 'U';
+
 	return (
 		<div className="p-6 max-w-2xl mx-auto w-full space-y-5">
 			{/* Profile card */}
@@ -846,29 +898,27 @@ function ProfileView({ isLoggedIn }) {
 				<div className="px-6 pb-6">
 					<div className="flex items-end gap-4 -mt-8 mb-4">
 						<div className="w-16 h-16 rounded-full bg-linear-to-br from-blue-500 to-blue-700 border-4 border-[#13141a] flex items-center justify-center text-white text-xl font-bold shrink-0">
-							A
+							{initials}
 						</div>
 						<div className="mb-1">
 							<h2 className="text-base font-semibold text-white">
-								Ankush Banik
+								{user?.username || 'You'}
 							</h2>
-							<p className="text-xs text-slate-500">@ankush263</p>
+							<p className="text-xs text-slate-500">
+								{user?.email || ''}
+							</p>
 						</div>
 						<button className="ml-auto flex items-center gap-1.5 px-3 py-1.5 bg-white/6 hover:bg-white/10 text-slate-300 text-xs font-medium rounded-lg border border-white/[0.07] transition-colors mb-1">
 							<Pencil size={11} />
 							Edit Profile
 						</button>
 					</div>
-					<p className="text-sm text-slate-400 mb-5 leading-relaxed">
-						Full-stack developer passionate about building great developer
-						tooling and sharing knowledge through interactive code recordings.
-					</p>
 					<div className="flex gap-6 text-xs text-slate-500">
 						{[
-							['6', 'Scrims'],
-							['9.9k', 'Views'],
-							['103', 'Forks'],
-							['683', 'Stars'],
+							[String(scrims.length), 'Scrims'],
+							[String(publishedCount), 'Public'],
+							[String(forksCount), 'Forks'],
+							[fmtDuration(totalDuration), 'Recorded'],
 						].map(([val, lbl]) => (
 							<div key={lbl} className="flex flex-col gap-0.5 items-center">
 								<strong className="text-white text-sm font-bold">{val}</strong>
@@ -879,37 +929,47 @@ function ProfileView({ isLoggedIn }) {
 				</div>
 			</div>
 
-			{/* Recent activity */}
+			{/* Recent scrims */}
 			<div className="bg-[#13141a] border border-white/6 rounded-2xl p-5">
 				<p className="text-[11px] font-medium text-slate-600 uppercase tracking-widest mb-4">
-					Recent Activity
+					My Scrims
 				</p>
-				<div className="space-y-1">
-					{MOCK_SCRIMS.slice(0, 4).map((s) => (
-						<div
-							key={s.id}
-							className="flex items-center gap-3 py-2.5 border-b border-white/4 last:border-0"
-						>
-							<div className="w-8 h-8 rounded-lg bg-blue-600/15 flex items-center justify-center shrink-0">
-								<Video size={13} className="text-blue-400" />
-							</div>
-							<div className="flex-1 min-w-0">
-								<p className="text-sm text-slate-200 truncate">{s.title}</p>
-								<p className="text-xs text-slate-600">{s.createdAt}</p>
-							</div>
-							<span
-								className={cn(
-									'text-[10px] px-1.5 py-0.5 rounded-full border font-medium shrink-0',
-									s.published
-										? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-										: 'bg-slate-500/10 border-slate-500/20 text-slate-500',
-								)}
+				{loading ? (
+					<div className="text-center py-6 text-slate-600 text-sm">Loading…</div>
+				) : scrims.length === 0 ? (
+					<p className="text-slate-600 text-sm py-4 text-center">No scrims yet.</p>
+				) : (
+					<div className="space-y-1">
+						{scrims.slice(0, 6).map((s) => (
+							<div
+								key={s.id}
+								className="flex items-center gap-3 py-2.5 border-b border-white/4 last:border-0"
 							>
-								{s.published ? 'Published' : 'Draft'}
-							</span>
-						</div>
-					))}
-				</div>
+								<div className="w-8 h-8 rounded-lg bg-blue-600/15 flex items-center justify-center shrink-0">
+									{s.forked_from_id ? (
+										<GitFork size={13} className="text-amber-400" />
+									) : (
+										<Video size={13} className="text-blue-400" />
+									)}
+								</div>
+								<div className="flex-1 min-w-0">
+									<p className="text-sm text-slate-200 truncate">{s.title}</p>
+									<p className="text-xs text-slate-600">{timeAgo(s.created_at)}</p>
+								</div>
+								<span
+									className={cn(
+										'text-[10px] px-1.5 py-0.5 rounded-full border font-medium shrink-0',
+										s.published
+											? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+											: 'bg-slate-500/10 border-slate-500/20 text-slate-500',
+									)}
+								>
+									{s.published ? 'Public' : 'Private'}
+								</span>
+							</div>
+						))}
+					</div>
+				)}
 			</div>
 		</div>
 	);
@@ -988,10 +1048,14 @@ export default function Home() {
 	const [view, setView] = useState('dashboard');
 	const [isLoggedIn, setIsLoggedIn] = useState(false);
 	const [sidebarOpen, setSidebarOpen] = useState(false);
+	const [user, setUser] = useState(null);
 
 	useEffect(() => {
-		// eslint-disable-next-line react-hooks/set-state-in-effect
-		setIsLoggedIn(!!localStorage.getItem('jwt'));
+		const loggedIn = !!localStorage.getItem('jwt');
+		setIsLoggedIn(loggedIn);
+		if (loggedIn) {
+			api('/me').then(setUser).catch(() => {});
+		}
 		document.documentElement.classList.add('dark');
 		return () => document.documentElement.classList.remove('dark');
 	}, []);
@@ -999,12 +1063,13 @@ export default function Home() {
 	const handleLogout = () => {
 		localStorage.removeItem('jwt');
 		setIsLoggedIn(false);
+		setUser(null);
 	};
 
 	const renderView = () => {
 		switch (view) {
 			case 'dashboard':
-				return <DashboardView navigate={navigate} setView={setView} />;
+				return <DashboardView navigate={navigate} setView={setView} isLoggedIn={isLoggedIn} user={user} />;
 			case 'scrims':
 				return <MyScrimsView navigate={navigate} />;
 			case 'browse':
@@ -1014,11 +1079,11 @@ export default function Home() {
 			case 'create':
 				return <CreateScrimView navigate={navigate} />;
 			case 'profile':
-				return <ProfileView isLoggedIn={isLoggedIn} />;
+				return <ProfileView isLoggedIn={isLoggedIn} user={user} />;
 			case 'settings':
 				return <SettingsView />;
 			default:
-				return <DashboardView navigate={navigate} setView={setView} />;
+				return <DashboardView navigate={navigate} setView={setView} isLoggedIn={isLoggedIn} user={user} />;
 		}
 	};
 
@@ -1031,6 +1096,7 @@ export default function Home() {
 				onLogout={handleLogout}
 				open={sidebarOpen}
 				setOpen={setSidebarOpen}
+				user={user}
 			/>
 			<div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 				<TopBar
@@ -1038,6 +1104,7 @@ export default function Home() {
 					isLoggedIn={isLoggedIn}
 					setOpen={setSidebarOpen}
 					navigate={navigate}
+					user={user}
 				/>
 				<main className="flex-1 overflow-y-auto">{renderView()}</main>
 			</div>

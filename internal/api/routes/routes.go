@@ -16,19 +16,20 @@ func SetupRoutes(r *gin.Engine, authHandler *handlers.AuthHandler, secret string
 		auth.POST("/login", authHandler.Login)
 	}
 
+	// Public scrim listing — no auth required
+	api.GET("/scrims/public", scrimHandler.ListPublicScrims)
+
 	protected := api.Group("/")
 	protected.Use(middleware.AuthMiddleware(secret))
 	{
-		protected.GET("/me", func(c *gin.Context) {
-			userID, _ := c.Get("UserID")
-			c.JSON(200, gin.H{"userid": userID})
-		})
+		protected.GET("/me", authHandler.GetMe)
 	}
 
 	scrim := api.Group("/scrims")
 	scrim.Use(middleware.AuthMiddleware(secret))
 	{
 		scrim.GET("", scrimHandler.GetScrimsByUser)
+		scrim.GET("/myforks", scrimHandler.GetForksByUser)
 		scrim.GET("/:scrimid", scrimHandler.GetScrimByID)
 		scrim.POST("", scrimHandler.CreateScrim)
 		scrim.PATCH("/:scrimid", scrimHandler.AttachScrim)

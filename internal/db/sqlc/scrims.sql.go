@@ -16,7 +16,7 @@ import (
 const createScrim = `-- name: CreateScrim :one
 INSERT INTO scrims (user_id, title, description, video_url, oplog_url, duration, videodescription)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, user_id, title, description, videodescription, video_url, oplog_url, duration, published, created_at, updated_at, mode, files
+RETURNING id, user_id, title, description, videodescription, video_url, oplog_url, duration, published, created_at, updated_at, mode, files, forked_from_id
 `
 
 type CreateScrimParams struct {
@@ -54,12 +54,55 @@ func (q *Queries) CreateScrim(ctx context.Context, arg CreateScrimParams) (Scrim
 		&i.UpdatedAt,
 		&i.Mode,
 		&i.Files,
+		&i.ForkedFromID,
 	)
 	return i, err
 }
 
+const getForksByUser = `-- name: GetForksByUser :many
+SELECT id, user_id, title, description, videodescription, video_url, oplog_url, duration, published, created_at, updated_at, mode, files, forked_from_id FROM scrims WHERE user_id = $1 AND forked_from_id IS NOT NULL
+`
+
+func (q *Queries) GetForksByUser(ctx context.Context, userID uuid.UUID) ([]Scrim, error) {
+	rows, err := q.db.QueryContext(ctx, getForksByUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Scrim
+	for rows.Next() {
+		var i Scrim
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Title,
+			&i.Description,
+			&i.Videodescription,
+			&i.VideoUrl,
+			&i.OplogUrl,
+			&i.Duration,
+			&i.Published,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Mode,
+			&i.Files,
+			&i.ForkedFromID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getScrimByID = `-- name: GetScrimByID :one
-SELECT id, user_id, title, description, videodescription, video_url, oplog_url, duration, published, created_at, updated_at, mode, files FROM scrims WHERE id = $1
+SELECT id, user_id, title, description, videodescription, video_url, oplog_url, duration, published, created_at, updated_at, mode, files, forked_from_id FROM scrims WHERE id = $1
 `
 
 func (q *Queries) GetScrimByID(ctx context.Context, id uuid.UUID) (Scrim, error) {
@@ -79,12 +122,13 @@ func (q *Queries) GetScrimByID(ctx context.Context, id uuid.UUID) (Scrim, error)
 		&i.UpdatedAt,
 		&i.Mode,
 		&i.Files,
+		&i.ForkedFromID,
 	)
 	return i, err
 }
 
 const getScrimByUser = `-- name: GetScrimByUser :many
-SELECT id, user_id, title, description, videodescription, video_url, oplog_url, duration, published, created_at, updated_at, mode, files FROM scrims WHERE user_id = $1
+SELECT id, user_id, title, description, videodescription, video_url, oplog_url, duration, published, created_at, updated_at, mode, files, forked_from_id FROM scrims WHERE user_id = $1
 `
 
 func (q *Queries) GetScrimByUser(ctx context.Context, userID uuid.UUID) ([]Scrim, error) {
@@ -110,6 +154,7 @@ func (q *Queries) GetScrimByUser(ctx context.Context, userID uuid.UUID) ([]Scrim
 			&i.UpdatedAt,
 			&i.Mode,
 			&i.Files,
+			&i.ForkedFromID,
 		); err != nil {
 			return nil, err
 		}
@@ -125,7 +170,7 @@ func (q *Queries) GetScrimByUser(ctx context.Context, userID uuid.UUID) ([]Scrim
 }
 
 const listScrims = `-- name: ListScrims :many
-SELECT id, user_id, title, description, videodescription, video_url, oplog_url, duration, published, created_at, updated_at, mode, files FROM scrims WHERE published = true
+SELECT id, user_id, title, description, videodescription, video_url, oplog_url, duration, published, created_at, updated_at, mode, files, forked_from_id FROM scrims WHERE published = true
 `
 
 func (q *Queries) ListScrims(ctx context.Context) ([]Scrim, error) {
@@ -151,6 +196,7 @@ func (q *Queries) ListScrims(ctx context.Context) ([]Scrim, error) {
 			&i.UpdatedAt,
 			&i.Mode,
 			&i.Files,
+			&i.ForkedFromID,
 		); err != nil {
 			return nil, err
 		}
@@ -163,6 +209,20 @@ func (q *Queries) ListScrims(ctx context.Context) ([]Scrim, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const setForkedFrom = `-- name: SetForkedFrom :exec
+UPDATE scrims SET forked_from_id = $2 WHERE id = $1
+`
+
+type SetForkedFromParams struct {
+	ID           uuid.UUID     `json:"id"`
+	ForkedFromID uuid.NullUUID `json:"forked_from_id"`
+}
+
+func (q *Queries) SetForkedFrom(ctx context.Context, arg SetForkedFromParams) error {
+	_, err := q.db.ExecContext(ctx, setForkedFrom, arg.ID, arg.ForkedFromID)
+	return err
 }
 
 const updateScrim = `-- name: UpdateScrim :exec

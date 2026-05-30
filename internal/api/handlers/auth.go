@@ -82,6 +82,16 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	response.OK(c, dto.ToUserResponse(user))
 }
 
+func (h *AuthHandler) GetMe(c *gin.Context) {
+	userID := c.GetString("userID")
+	user, err := h.authService.GetUserByID(c, userID)
+	if err != nil {
+		response.Error(c, 404, "user not found")
+		return
+	}
+	response.OK(c, dto.ToUserResponse(user))
+}
+
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req registerRequest
 

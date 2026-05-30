@@ -172,6 +172,18 @@ func (s *ScrimService) GetScrimsByUser(ctx context.Context, userID string) ([]sq
 	return s.q.GetScrimByUser(ctx, uid)
 }
 
+func (s *ScrimService) GetPublicScrims(ctx context.Context) ([]sqlc.Scrim, error) {
+	return s.q.ListScrims(ctx)
+}
+
+func (s *ScrimService) GetForksByUser(ctx context.Context, userID string) ([]sqlc.Scrim, error) {
+	uid, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, err
+	}
+	return s.q.GetForksByUser(ctx, uid)
+}
+
 type FileSnapshot struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
@@ -231,6 +243,11 @@ func (s *ScrimService) ForkScrim(
 	if err != nil {
 		return nil, err
 	}
+
+	_ = s.q.SetForkedFrom(ctx, sqlc.SetForkedFromParams{
+		ID:           newScrim.ID,
+		ForkedFromID: uuid.NullUUID{UUID: origID, Valid: true},
+	})
 
 	for _, snap := range snapshots {
 		_, _ = s.q.CreateScrimFiles(ctx, sqlc.CreateScrimFilesParams{

@@ -26,6 +26,7 @@ type Scrim struct {
 	UpdatedAt        sql.NullTime          `json:"updated_at"`
 	Mode             sql.NullString        `json:"mode"`
 	Files            pqtype.NullRawMessage `json:"files"`
+	ForkedFromID     uuid.NullUUID         `json:"forked_from_id"`
 }
 
 type Scrimfile struct {

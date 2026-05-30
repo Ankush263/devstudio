@@ -100,10 +100,10 @@ func (h *ScrimHandler) GetScrimByID(c *gin.Context) {
 }
 
 type ForkRequest struct {
-	Title          string                   `json:"title"`
-	ForkTime       float64                  `json:"fork_time"`
-	ForkOplogIndex int                      `json:"fork_oplog_index"`
-	FileSnapshots  []services.FileSnapshot  `json:"file_snapshots"`
+	Title          string                  `json:"title"`
+	ForkTime       float64                 `json:"fork_time"`
+	ForkOplogIndex int                     `json:"fork_oplog_index"`
+	FileSnapshots  []services.FileSnapshot `json:"file_snapshots"`
 }
 
 func (h *ScrimHandler) ForkScrim(c *gin.Context) {
@@ -139,6 +139,25 @@ func (h *ScrimHandler) GetScrimsByUser(c *gin.Context) {
 	scrims, err := h.scrimService.GetScrimsByUser(c, userID)
 	if err != nil {
 		response.Error(c, 500, "failed to get scrims")
+		return
+	}
+	response.OK(c, gin.H{"scrims": dto.ToManyScrimResponse(scrims)})
+}
+
+func (h *ScrimHandler) ListPublicScrims(c *gin.Context) {
+	scrims, err := h.scrimService.GetPublicScrims(c)
+	if err != nil {
+		response.Error(c, 500, "failed to get scrims")
+		return
+	}
+	response.OK(c, gin.H{"scrims": dto.ToManyScrimResponse(scrims)})
+}
+
+func (h *ScrimHandler) GetForksByUser(c *gin.Context) {
+	userID := c.GetString("userID")
+	scrims, err := h.scrimService.GetForksByUser(c, userID)
+	if err != nil {
+		response.Error(c, 500, "failed to get forks")
 		return
 	}
 	response.OK(c, gin.H{"scrims": dto.ToManyScrimResponse(scrims)})

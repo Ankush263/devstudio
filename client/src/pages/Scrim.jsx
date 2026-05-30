@@ -409,6 +409,7 @@ ${js ? `<script>try{${js}}catch(e){console.error(String(e));}</script>` : ''}
 function SaveModal({ defaultTitle, onSave, onCancel, loading }) {
 	const [title, setTitle] = useState(defaultTitle || '');
 	const [description, setDescription] = useState('');
+	const [isPublic, setIsPublic] = useState(false);
 
 	return (
 		<Dialog open onOpenChange={() => onCancel()}>
@@ -446,6 +447,32 @@ function SaveModal({ defaultTitle, onSave, onCancel, loading }) {
 							className="bg-zinc-900 border-zinc-800 text-zinc-200 font-mono text-[12px] h-9 focus-visible:ring-blue-500/50 focus-visible:border-blue-500/50"
 						/>
 					</div>
+					{/* Visibility toggle */}
+					<div className="flex items-center justify-between rounded-lg bg-zinc-900 border border-zinc-800 px-3 py-2.5">
+						<div>
+							<p className="text-[11px] font-mono text-zinc-300">
+								{isPublic ? 'Public' : 'Private'}
+							</p>
+							<p className="text-[10px] text-zinc-600 mt-0.5">
+								{isPublic ? 'Visible to everyone on Dashboard' : 'Only visible to you'}
+							</p>
+						</div>
+						<button
+							type="button"
+							onClick={() => setIsPublic((p) => !p)}
+							className={cn(
+								'relative w-9 h-5 rounded-full transition-colors duration-200 shrink-0',
+								isPublic ? 'bg-blue-500' : 'bg-zinc-700',
+							)}
+						>
+							<span
+								className={cn(
+									'absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform duration-200',
+									isPublic ? 'translate-x-4' : 'translate-x-0.5',
+								)}
+							/>
+						</button>
+					</div>
 				</div>
 
 				<DialogFooter className="gap-2">
@@ -457,7 +484,7 @@ function SaveModal({ defaultTitle, onSave, onCancel, loading }) {
 						Discard
 					</Button>
 					<Button
-						onClick={() => onSave({ title, description })}
+						onClick={() => onSave({ title, description, published: isPublic })}
 						disabled={loading || !title.trim()}
 						className="flex-1 font-mono text-[11px] tracking-widest uppercase bg-blue-500 hover:bg-blue-400 text-zinc-950 font-bold h-9"
 					>
@@ -992,7 +1019,7 @@ export default function Scrim() {
 		setIsRecording(false);
 	};
 
-	const handleSaveScrim = async ({ title, description }) => {
+	const handleSaveScrim = async ({ title, description, published = false }) => {
 		if (!pendingSaveData) return;
 		setSaveLoading(true);
 		try {
@@ -1030,6 +1057,7 @@ export default function Scrim() {
 					duration: Math.ceil(pendingSaveData.duration),
 					videourl: videoUrl,
 					oplogurl: oplogUrl,
+					published,
 				}),
 			});
 
