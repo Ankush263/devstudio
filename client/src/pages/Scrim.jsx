@@ -1235,8 +1235,25 @@ export default function Scrim() {
 		if (isPlaying && savedData) {
 			playbackIntervalRef.current = setInterval(() => {
 				if (audioRef.current && !audioRef.current.paused) {
-					setAudioCurrentTime(audioRef.current.currentTime);
-					applyOplog(audioRef.current.currentTime);
+					const t = audioRef.current.currentTime;
+					// Forked scrims inherit the full original audio but should only
+					// play up to the truncated fork duration. Halt there.
+					const audioDur = isFinite(audioRef.current.duration)
+						? audioRef.current.duration
+						: 0;
+					const total =
+						audioDur && savedData.duration
+							? Math.min(audioDur, savedData.duration)
+							: audioDur || savedData.duration || 0;
+					if (total && t >= total) {
+						audioRef.current.pause();
+						setAudioCurrentTime(total);
+						applyOplog(total);
+						setIsPlaying(false);
+						return;
+					}
+					setAudioCurrentTime(t);
+					applyOplog(t);
 				}
 			}, 50);
 		}
@@ -1319,7 +1336,10 @@ export default function Scrim() {
 	}, [savedData]);
 
 	const seekTo = useCallback((t) => {
-		const total = audioDuration || savedData?.duration || 0;
+		const total =
+			audioDuration && savedData?.duration
+				? Math.min(audioDuration, savedData.duration)
+				: audioDuration || savedData?.duration || 0;
 		const clamped = Math.max(0, Math.min(t, total));
 		setAudioCurrentTime(clamped);
 		if (audioRef.current) audioRef.current.currentTime = clamped;
@@ -1329,7 +1349,10 @@ export default function Scrim() {
 	const handleBarPointerDown = useCallback((e) => {
 		e.preventDefault();
 		const rect = e.currentTarget.getBoundingClientRect();
-		const total = audioDuration || savedData?.duration || 1;
+		const total =
+			audioDuration && savedData?.duration
+				? Math.min(audioDuration, savedData.duration)
+				: audioDuration || savedData?.duration || 1;
 		const seek = (clientX) => {
 			const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
 			seekTo(pct * total);
@@ -1533,6 +1556,14 @@ export default function Scrim() {
 	};
 
 	// ── DERIVED ──
+	// Forked scrims keep the full original audio but a shorter (truncated)
+	// duration, so use the shorter of the two as the real timeline length.
+	const totalDuration =
+		audioDuration && savedData?.duration
+			? Math.min(audioDuration, savedData.duration)
+			: audioDuration || savedData?.duration || 0;
+	const progressPct = Math.min(1, audioCurrentTime / (totalDuration || 1)) * 100;
+
 	const srcDoc = buildSrcDoc(files, reactMode);
 	const hasJsx = files.some((f) => f.name.endsWith('.jsx'));
 
@@ -1870,7 +1901,7 @@ export default function Scrim() {
 										<div
 											className="h-full bg-blue-500 rounded-full"
 											style={{
-												width: `${(audioCurrentTime / (audioDuration || savedData?.duration || 1)) * 100}%`,
+												width: `${progressPct}%`,
 											}}
 										/>
 									</div>
@@ -1878,13 +1909,13 @@ export default function Scrim() {
 									<div
 										className="absolute w-3 h-3 bg-blue-400 rounded-full -translate-x-1/2 shadow pointer-events-none"
 										style={{
-											left: `${(audioCurrentTime / (audioDuration || savedData?.duration || 1)) * 100}%`,
+											left: `${progressPct}%`,
 										}}
 									/>
 									{/* Fork marker */}
 									{pausedEditing && savedData && (
 										<ForkMarker
-											position={(pausedTimeRef.current / (audioDuration || savedData.duration || 1)) * 100}
+											position={Math.min(100, (pausedTimeRef.current / (totalDuration || 1)) * 100)}
 											onSave={() => setShowForkModal(true)}
 											onDismiss={() => setPausedEditing(false)}
 										/>
@@ -1893,7 +1924,7 @@ export default function Scrim() {
 
 								{/* Total duration */}
 								<span className="text-zinc-600 text-[10px] tabular-nums w-9 shrink-0">
-									{fmtTime(audioDuration || savedData?.duration || 0)}
+									{fmtTime(totalDuration)}
 								</span>
 
 								<Volume2 className="w-3.5 h-3.5 text-zinc-600 shrink-0 ml-1" />
